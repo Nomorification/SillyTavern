@@ -11,6 +11,7 @@ import yaml from 'yaml';
 import _ from 'lodash';
 import mime from 'mime-types';
 import jimp from 'jimp';
+import storage from 'node-persist';
 
 import { AVATAR_WIDTH, AVATAR_HEIGHT } from '../constants.js';
 import { default as validateAvatarUrlMiddleware, getFileNameValidationFunction } from '../middleware/validateFileName.js';
@@ -29,6 +30,29 @@ const memoryCache = new MemoryLimitedMap(memoryCacheCapacity);
 const isAndroid = process.platform === 'android';
 // Use shallow character data for the character list
 const useShallowCharacters = !!getConfigValue('performance.lazyLoadCharacters', false, 'boolean');
+const useDiskCache = true; // !!getConfigValue('performance.useDiskCache', false, 'boolean');
+
+const diskCache = {
+    /**
+     * @type {import('node-persist').LocalStorage?}
+     * @private
+     */
+    _instance: null,
+    /**
+     * Gets the disk cache instance.
+     * @returns {Promise<import('node-persist').LocalStorage>}
+     */
+    instance: async function() {
+        if (this._instance) {
+            return this._instance;
+        }
+
+        const cacheDir = path.join(globalThis.DATA_ROOT, '_cache', 'characters');
+        this._instance = storage.create({ dir: cacheDir, ttl: true });
+        await this._instance.init();
+        return this._instance;
+    },
+};
 
 /**
  * Reads the character card from the specified image file.
@@ -42,9 +66,18 @@ async function readCharacterData(inputFile, inputFormat = 'png') {
     if (memoryCache.has(cacheKey)) {
         return memoryCache.get(cacheKey);
     }
+    if (useDiskCache) {
+        const cachedData = await diskCache.instance().then(i => i.getItem(cacheKey));
+        if (cachedData) {
+            return cachedData;
+        }
+    }
 
     const result = parse(inputFile, inputFormat);
     !isAndroid && memoryCache.set(cacheKey, result);
+    if (useDiskCache) {
+        await diskCache.instance().then(i => i.setItem(cacheKey, result));
+    }
     return result;
 }
 
@@ -67,6 +100,15 @@ async function writeCharacterData(inputFile, data, outputFile, request, crop = u
             if (key.startsWith(inputFile)) {
                 memoryCache.delete(key);
                 break;
+            }
+        }
+        if (useDiskCache && !Buffer.isBuffer(inputFile)) {
+            const keys = await diskCache.instance().then(i => i.keys());
+            for (const key of keys) {
+                if (key.startsWith(inputFile)) {
+                    await diskCache.instance().then(i => i.removeItem(key));
+                    break;
+                }
             }
         }
 
