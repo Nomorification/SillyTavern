@@ -30,7 +30,7 @@ const memoryCache = new MemoryLimitedMap(memoryCacheCapacity);
 const isAndroid = process.platform === 'android';
 // Use shallow character data for the character list
 const useShallowCharacters = !!getConfigValue('performance.lazyLoadCharacters', false, 'boolean');
-const useDiskCache = true; // !!getConfigValue('performance.useDiskCache', false, 'boolean');
+const useDiskCache = !!getConfigValue('performance.useDiskCache', false, 'boolean');
 
 const diskCache = {
     /**
@@ -48,7 +48,8 @@ const diskCache = {
         }
 
         const cacheDir = path.join(globalThis.DATA_ROOT, '_cache', 'characters');
-        this._instance = storage.create({ dir: cacheDir, ttl: true });
+        const ttl = 7 * 24 * 60 * 60 * 1000; // 7 days
+        this._instance = storage.create({ dir: cacheDir, ttl: ttl });
         await this._instance.init();
         return this._instance;
     },
@@ -73,7 +74,7 @@ async function readCharacterData(inputFile, inputFormat = 'png') {
         }
     }
 
-    const result = parse(inputFile, inputFormat);
+    const result = await parse(inputFile, inputFormat);
     !isAndroid && memoryCache.set(cacheKey, result);
     if (useDiskCache) {
         await diskCache.instance().then(i => i.setItem(cacheKey, result));
