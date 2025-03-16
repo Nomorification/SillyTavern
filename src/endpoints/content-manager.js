@@ -48,6 +48,7 @@ export const CONTENT_TYPES = {
     MOVING_UI: 'moving_ui',
     QUICK_REPLIES: 'quick_replies',
     SYSPROMPT: 'sysprompt',
+    REASONING: 'reasoning',
 };
 
 /**
@@ -61,7 +62,7 @@ export function getDefaultPresets(directories) {
         const presets = [];
 
         for (const contentItem of contentIndex) {
-            if (contentItem.type.endsWith('_preset') || contentItem.type === 'instruct' || contentItem.type === 'context' || contentItem.type === 'sysprompt') {
+            if (contentItem.type.endsWith('_preset') || ['instruct', 'context', 'sysprompt', 'reasoning'].includes(contentItem.type)) {
                 contentItem.name = path.parse(contentItem.filename).name;
                 contentItem.folder = getTargetByType(contentItem.type, directories);
                 presets.push(contentItem);
@@ -299,6 +300,8 @@ function getTargetByType(type, directories) {
             return directories.quickreplies;
         case CONTENT_TYPES.SYSPROMPT:
             return directories.sysprompt;
+        case CONTENT_TYPES.REASONING:
+            return directories.reasoning;
         default:
             return null;
     }

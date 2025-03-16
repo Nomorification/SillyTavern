@@ -55,6 +55,7 @@ import { POPUP_TYPE, callGenericPopup } from './popup.js';
 import { loadSystemPrompts } from './sysprompt.js';
 import { fuzzySearchCategories } from './filters.js';
 import { accountStorage } from './util/AccountStorage.js';
+import { loadReasoningTemplates } from './reasoning.js';
 
 export {
     loadPowerUserSettings,
@@ -257,6 +258,7 @@ let power_user = {
     },
 
     reasoning: {
+        name: 'DeepSeek R1',
         auto_parse: false,
         add_to_prompts: false,
         auto_expand: false,
@@ -1624,6 +1626,7 @@ async function loadPowerUserSettings(settings, data) {
     await loadInstructMode(data);
     await loadContextSettings();
     await loadSystemPrompts(data);
+    await loadReasoningTemplates(data);
     loadMaxContextUnlocked();
     switchWaifuMode();
     switchSpoilerMode();
