@@ -302,12 +302,26 @@ function readFirstLine(filePath) {
     const stream = fs.createReadStream(filePath, { encoding: 'utf8' });
     const rl = readline.createInterface({ input: stream });
     return new Promise((resolve, reject) => {
+        let resolved = false;
         rl.on('line', line => {
+            resolved = true;
             rl.close();
             stream.close();
             resolve(line);
         });
-        rl.on('error', reject);
+
+        rl.on('error', error => {
+            resolved = true;
+            reject(error);
+        });
+
+        // Handle empty files
+        stream.on('end', () => {
+            if (!resolved) {
+                resolved = true;
+                resolve('');
+            }
+        });
     });
 }
 
