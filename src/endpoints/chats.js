@@ -319,7 +319,7 @@ function readFirstLine(filePath) {
  */
 async function checkChatIntegrity(filePath, integritySlug) {
     // If the chat file doesn't exist, assume it's intact
-    if (!integritySlug || !fs.existsSync(filePath)) {
+    if (!fs.existsSync(filePath)) {
         return true;
     }
 
