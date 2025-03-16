@@ -156,7 +156,7 @@ export async function createBranch(mesId) {
     if (selected_group) {
         await saveGroupBookmarkChat(selected_group, name, newMetadata, mesId);
     } else {
-        await saveChat(name, newMetadata, mesId);
+        await saveChat({ chatName: name, withMetadata: newMetadata, mesId });
     }
     // append to branches list if it exists
     // otherwise create it
@@ -212,7 +212,7 @@ export async function createNewBookmark(mesId, { forceName = null } = {}) {
     if (selected_group) {
         await saveGroupBookmarkChat(selected_group, name, newMetadata, mesId);
     } else {
-        await saveChat(name, newMetadata, mesId);
+        await saveChat({ chatName: name, withMetadata: newMetadata, mesId });
     }
 
     lastMes.extra['bookmark_link'] = name;

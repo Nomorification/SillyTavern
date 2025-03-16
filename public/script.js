@@ -172,6 +172,7 @@ import {
     copyText,
     escapeHtml,
     saveBase64AsFile,
+    uuidv4,
 } from './scripts/utils.js';
 import { debounce_timeout } from './scripts/constants.js';
 
@@ -6684,7 +6685,17 @@ export function saveChatDebounced() {
     }, DEFAULT_SAVE_EDIT_TIMEOUT);
 }
 
-export async function saveChat(chatName, withMetadata, mesId) {
+/**
+ * Saves the chat to the server.
+ * @param {object} [options] - Additional options.
+ * @param {string} [options.chatName] The name of the chat file to save to
+ * @param {object} [options.withMetadata] Additional metadata to save with the chat
+ * @param {number} [options.mesId] The message ID to save the chat up to
+ * @param {boolean} [options.force] Force the saving despire the integrity check result
+ *
+ * @returns {Promise<void>}
+ */
+export async function saveChat({ chatName, withMetadata, mesId, force } = {}) {
     const metadata = { ...chat_metadata, ...(withMetadata || {}) };
     const fileName = chatName ?? characters[this_chid]?.chat;
 
@@ -6704,53 +6715,52 @@ export async function saveChat(chatName, withMetadata, mesId) {
             toastr.error(t`Trying to save group chat with regular saveChat function. Aborting to prevent corruption.`);
             throw new Error('Group chat saved from saveChat');
         }
-        /*
-        if (item.is_user) {
-            //var str = item.mes.replace(`${name1}:`, `${name1}:`);
-            //chat[i].mes = str;
-            //chat[i].name = name1;
-        } else if (i !== chat.length - 1 && chat[i].swipe_id !== undefined) {
-            //  delete chat[i].swipes;
-            //  delete chat[i].swipe_id;
-        }
-        */
     });
 
-    const trimmed_chat = (mesId !== undefined && mesId >= 0 && mesId < chat.length)
-        ? chat.slice(0, parseInt(mesId) + 1)
-        : chat;
+    const trimmedChat = (mesId !== undefined && mesId >= 0 && mesId < chat.length)
+        ? chat.slice(0, Number(mesId) + 1)
+        : chat.slice();
 
-    var save_chat = [
+    const chatToSave = [
         {
             user_name: name1,
             character_name: name2,
             create_date: chat_create_date,
             chat_metadata: metadata,
         },
-        ...trimmed_chat,
+        ...trimmedChat,
     ];
-    return jQuery.ajax({
-        type: 'POST',
-        url: '/api/chats/save',
-        data: JSON.stringify({
-            ch_name: characters[this_chid].name,
-            file_name: fileName,
-            chat: save_chat,
-            avatar_url: characters[this_chid].avatar,
-        }),
-        beforeSend: function () {
 
-        },
-        cache: false,
-        dataType: 'json',
-        contentType: 'application/json',
-        success: function (data) { },
-        error: function (jqXHR, exception) {
-            toastr.error(t`Check the server connection and reload the page to prevent data loss.`, t`Chat could not be saved`);
-            console.log(exception);
-            console.log(jqXHR);
-        },
-    });
+    try {
+        const result = await fetch('/api/chats/save', {
+            method: 'POST',
+            headers: getRequestHeaders(),
+            body: JSON.stringify({
+                ch_name: characters[this_chid].name,
+                file_name: fileName,
+                chat: chatToSave,
+                avatar_url: characters[this_chid].avatar,
+            }),
+            cache: 'no-cache',
+        });
+
+        if (!result.ok) {
+            const errorData = await result.json();
+            if (errorData?.error === 'integrity' && !force) {
+                const forceSaveConfirmed = await Popup.show.confirm(
+                    t`Chat integrity check failed, operation may result in data loss.`,
+                    t`Would you like to overwrite the chat file anyway? Pressing "NO" will cancel the save operation.`,
+                ) === POPUP_RESULT.AFFIRMATIVE;
+
+                if (forceSaveConfirmed) {
+                    await saveChat({ chatName, withMetadata, mesId, force: true });
+                }
+            }
+        }
+    } catch (error) {
+        console.error(error);
+        toastr.error(t`Check the server connection and reload the page to prevent data loss.`, t`Chat could not be saved`);
+    }
 }
 
 async function read_avatar_load(input) {
@@ -6926,6 +6936,9 @@ export async function getChat() {
             chat.shift();
         } else {
             chat_create_date = humanizedDateTime();
+        }
+        if (!chat_metadata['integrity']) {
+            chat_metadata['integrity'] = uuidv4();
         }
         await getChatResult();
         eventSource.emit('chatLoaded', { detail: { id: this_chid, character: characters[this_chid] } });
