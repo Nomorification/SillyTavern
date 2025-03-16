@@ -39,6 +39,7 @@ const CC_COMMANDS = [
     'proxy',
     'stop-strings',
     'start-reply-with',
+    'reasoning-template',
 ];
 
 const TC_COMMANDS = [
@@ -54,6 +55,7 @@ const TC_COMMANDS = [
     'tokenizer',
     'stop-strings',
     'start-reply-with',
+    'reasoning-template',
 ];
 
 const FANCY_NAMES = {
@@ -70,6 +72,7 @@ const FANCY_NAMES = {
     'tokenizer': 'Tokenizer',
     'stop-strings': 'Custom Stopping Strings',
     'start-reply-with': 'Start Reply With',
+    'reasoning-template': 'Reasoning Template',
 };
 
 /**
@@ -154,6 +157,7 @@ const profilesProvider = () => [
  * @property {string} [tokenizer] Tokenizer
  * @property {string} [stop-strings] Custom Stopping Strings
  * @property {string} [start-reply-with] Start Reply With
+ * @property {string} [reasoning-template] Reasoning Template
  * @property {string[]} [exclude] Commands to exclude
  */
 
