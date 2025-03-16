@@ -6734,6 +6734,7 @@ export async function saveChat({ chatName, withMetadata, mesId, force = false } 
     try {
         const result = await fetch('/api/chats/save', {
             method: 'POST',
+            cache: 'no-cache',
             headers: getRequestHeaders(),
             body: JSON.stringify({
                 ch_name: characters[this_chid].name,
@@ -6742,22 +6743,26 @@ export async function saveChat({ chatName, withMetadata, mesId, force = false } 
                 avatar_url: characters[this_chid].avatar,
                 force: force,
             }),
-            cache: 'no-cache',
         });
 
-        if (!result.ok) {
-            const errorData = await result.json();
-            if (errorData?.error === 'integrity' && !force) {
-                const forceSaveConfirmed = await Popup.show.confirm(
-                    t`Chat integrity check failed, continuing the operation may result in data loss.`,
-                    t`Would you like to overwrite the chat file anyway? Pressing "NO" will cancel the save operation.`,
-                    { okButton: t`Yes, overwrite`, cancelButton: t`No, cancel` },
-                ) === POPUP_RESULT.AFFIRMATIVE;
+        if (result.ok) {
+            return;
+        }
 
-                if (forceSaveConfirmed) {
-                    await saveChat({ chatName, withMetadata, mesId, force: true });
-                }
-            }
+        const errorData = await result.json();
+        const isIntegrityError = errorData?.error === 'integrity' && !force;
+        if (!isIntegrityError) {
+            throw new Error(result.statusText);
+        }
+
+        const forceSaveConfirmed = await Popup.show.confirm(
+            t`Chat integrity check failed, continuing the operation may result in data loss.`,
+            t`Would you like to overwrite the chat file anyway? Pressing "NO" will cancel the save operation.`,
+            { okButton: t`Yes, overwrite`, cancelButton: t`No, cancel` },
+        ) === POPUP_RESULT.AFFIRMATIVE;
+
+        if (forceSaveConfirmed) {
+            await saveChat({ chatName, withMetadata, mesId, force: true });
         }
     } catch (error) {
         console.error(error);
