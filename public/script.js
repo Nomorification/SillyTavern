@@ -6695,7 +6695,7 @@ export function saveChatDebounced() {
  *
  * @returns {Promise<void>}
  */
-export async function saveChat({ chatName, withMetadata, mesId, force } = {}) {
+export async function saveChat({ chatName, withMetadata, mesId, force = false } = {}) {
     const metadata = { ...chat_metadata, ...(withMetadata || {}) };
     const fileName = chatName ?? characters[this_chid]?.chat;
 
@@ -6740,6 +6740,7 @@ export async function saveChat({ chatName, withMetadata, mesId, force } = {}) {
                 file_name: fileName,
                 chat: chatToSave,
                 avatar_url: characters[this_chid].avatar,
+                force: force,
             }),
             cache: 'no-cache',
         });
@@ -6748,8 +6749,9 @@ export async function saveChat({ chatName, withMetadata, mesId, force } = {}) {
             const errorData = await result.json();
             if (errorData?.error === 'integrity' && !force) {
                 const forceSaveConfirmed = await Popup.show.confirm(
-                    t`Chat integrity check failed, operation may result in data loss.`,
+                    t`Chat integrity check failed, continuing the operation may result in data loss.`,
                     t`Would you like to overwrite the chat file anyway? Pressing "NO" will cancel the save operation.`,
+                    { okButton: t`Yes, overwrite`, cancelButton: t`No, cancel` },
                 ) === POPUP_RESULT.AFFIRMATIVE;
 
                 if (forceSaveConfirmed) {
