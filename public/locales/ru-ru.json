@@ -2337,5 +2337,7 @@
     "Both prefix and suffix must be set in the Reasoning Formatting settings.": "В настройках форматирования рассуждений должны быть заданы префикс и суффикс.",
     "Invalid return type '${0}', defaulting to 'reasoning'.": "Некорректный возвращаемый тип, используем стандартный 'reasoning'.",
     "Reasoning already exists.": "Рассуждения уже присутствуют.",
-    "Edit Message": "Редактирование"
+    "Edit Message": "Редактирование",
+    "Status check bypassed": "Проверка статуса отключена",
+    "Valid": "Работает"
 }

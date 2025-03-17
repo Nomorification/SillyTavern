@@ -1023,7 +1023,7 @@ export function displayOnlineStatus() {
         $('.online_status_text').text($('#API-status-top').attr('no_connection_text'));
     } else {
         $('.online_status_indicator').addClass('success');
-        $('.online_status_text').text(t([online_status]));
+        $('.online_status_text').text(online_status);
     }
 }
 
@@ -1144,7 +1144,7 @@ export async function clearItemizedPrompts() {
 async function getStatusHorde() {
     try {
         const hordeStatus = await checkHordeStatus();
-        setOnlineStatus(hordeStatus ? 'Connected' : 'no_connection');
+        setOnlineStatus(hordeStatus ? t`Connected` : 'no_connection');
     }
     catch {
         setOnlineStatus('no_connection');
@@ -1211,7 +1211,7 @@ async function getStatusTextgen() {
     }
 
     if ([textgen_types.GENERIC, textgen_types.OOBA].includes(textgen_settings.type) && textgen_settings.bypass_status_check) {
-        setOnlineStatus('Status check bypassed');
+        setOnlineStatus(t`Status check bypassed`);
         return resultCheckStatus();
     }
 
@@ -1236,7 +1236,7 @@ async function getStatusTextgen() {
             setOnlineStatus(textgen_settings.togetherai_model);
         } else if (textgen_settings.type === textgen_types.OLLAMA) {
             loadOllamaModels(data?.data);
-            setOnlineStatus(textgen_settings.ollama_model || 'Connected');
+            setOnlineStatus(textgen_settings.ollama_model || t`Connected`);
         } else if (textgen_settings.type === textgen_types.INFERMATICAI) {
             loadInfermaticAIModels(data?.data);
             setOnlineStatus(textgen_settings.infermaticai_model);
@@ -1260,7 +1260,7 @@ async function getStatusTextgen() {
             setOnlineStatus(textgen_settings.tabby_model || data?.result);
         } else if (textgen_settings.type === textgen_types.GENERIC) {
             loadGenericModels(data?.data);
-            setOnlineStatus(textgen_settings.generic_model || data?.result || 'Connected');
+            setOnlineStatus(textgen_settings.generic_model || data?.result || t`Connected`);
         } else {
             setOnlineStatus(data?.result);
         }
