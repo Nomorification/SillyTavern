@@ -6761,8 +6761,8 @@ export async function saveChat({ chatName, withMetadata, mesId, force = false } 
         }
 
         const forceSaveConfirmed = await Popup.show.confirm(
-            t`Chat integrity check failed, continuing the operation may result in data loss.`,
-            t`Would you like to overwrite the chat file anyway? Pressing "NO" will cancel the save operation.`,
+            t`ERROR: Chat integrity check failed.`,
+            t`Continuing the operation may result in data loss. Would you like to overwrite the chat file anyway? Pressing "NO" will cancel the save operation.`,
             { okButton: t`Yes, overwrite`, cancelButton: t`No, cancel` },
         ) === POPUP_RESULT.AFFIRMATIVE;
 
