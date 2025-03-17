@@ -8,6 +8,7 @@ import { MacrosParser } from './macros.js';
 import { chat_completion_sources, getChatCompletionModel, oai_settings } from './openai.js';
 import { Popup } from './popup.js';
 import { performFuzzySearch, power_user } from './power-user.js';
+import { getPresetManager } from './preset-manager.js';
 import { SlashCommand } from './slash-commands/SlashCommand.js';
 import { ARGUMENT_TYPE, SlashCommandArgument, SlashCommandNamedArgument } from './slash-commands/SlashCommandArgument.js';
 import { commonEnumProviders, enumIcons } from './slash-commands/SlashCommandCommonEnumsProvider.js';
@@ -28,6 +29,8 @@ import { copyText, escapeRegex, isFalseBoolean, isTrueBoolean, setDatasetPropert
  * @type {ReasoningTemplate[]} List of reasoning templates
  */
 export const reasoning_templates = [];
+
+export const DEFAULT_REASONING_TEMPLATE = 'DeepSeek';
 
 /**
  * @type {Record<string, JQuery<HTMLElement>>} List of UI elements for reasoning settings
@@ -1337,8 +1340,30 @@ export async function loadReasoningTemplates(data) {
         $('<option>').val(template.name).text(template.name).appendTo(UI.$select);
     }
 
-    if (!power_user.reasoning.name) {
-        power_user.reasoning.name = reasoning_templates[0]?.name ?? '';
+    // No template name, need to migrate
+    if (power_user.reasoning.name === undefined) {
+        const defaultTemplate = reasoning_templates.find(p => p.name === DEFAULT_REASONING_TEMPLATE);
+        if (defaultTemplate) {
+            // If the reasoning settings were modified - migrate them to a custom template
+            if (power_user.reasoning.prefix !== defaultTemplate.prefix || power_user.reasoning.suffix !== defaultTemplate.suffix || power_user.reasoning.separator !== defaultTemplate.separator) {
+                /** @type {ReasoningTemplate} */
+                const data = {
+                    name: '[Migrated] Custom',
+                    prefix: power_user.reasoning.prefix,
+                    suffix: power_user.reasoning.suffix,
+                    separator: power_user.reasoning.separator,
+                };
+                await getPresetManager('reasoning')?.savePreset(data.name, data);
+                power_user.reasoning.name = data.name;
+            } else {
+                power_user.reasoning.name = defaultTemplate.name;
+            }
+        } else {
+            // Template not found (deleted or content check skipped - leave blank)
+            power_user.reasoning.name = '';
+        }
+
+        saveSettingsDebounced();
     }
 
     UI.$select.val(power_user.reasoning.name);
