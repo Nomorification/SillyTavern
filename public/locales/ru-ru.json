@@ -2320,5 +2320,22 @@
     "Case sensitive": "Чувствительно к регистру",
     "Find Regex is empty": "Рег. выражение не указано",
     "Click the button to save it as a file.": "Нажмите на кнопку справа, чтобы сохранить его в файл.",
-    "Export as JSONL": "Экспорт в формате JSONL"
+    "Export as JSONL": "Экспорт в формате JSONL",
+    "Thought for some time": "Какое-то время заняли размышления",
+    "Thinking...": "В раздумьях...",
+    "Thought for ${0}": "Размышления заняли ${0}",
+    "Hidden reasoning - Add reasoning block": "Рассуждения скрыты - Добавить блок рассуждений",
+    "Add reasoning block": "Добавить блок рассуждений",
+    "Edit reasoning": "Редактировать рассуждения",
+    "Copy reasoning": "Скопировать рассуждения",
+    "Confirm Edit": "Подтвердить",
+    "Remove reasoning": "Удалить рассуждения",
+    "Cancel edit": "Отменить редактирование",
+    "Remove Reasoning": "Удалить рассуждения",
+    "Are you sure you want to clear the reasoning?<br />Visible message contents will stay intact.": "Вы точно хотите удалить блок рассуждений?<br />Основное сообщение останется на месте.",
+    "Reasoning Parse": "Парсинг рассуждений",
+    "Both prefix and suffix must be set in the Reasoning Formatting settings.": "В настройках форматирования рассуждений должны быть заданы префикс и суффикс.",
+    "Invalid return type '${0}', defaulting to 'reasoning'.": "Некорректный возвращаемый тип, используем стандартный 'reasoning'.",
+    "Reasoning already exists.": "Рассуждения уже присутствуют.",
+    "Edit Message": "Редактирование"
 }
