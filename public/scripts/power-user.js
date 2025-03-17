@@ -258,7 +258,7 @@ let power_user = {
     },
 
     reasoning: {
-        name: 'DeepSeek R1',
+        name: 'DeepSeek',
         auto_parse: false,
         add_to_prompts: false,
         auto_expand: false,

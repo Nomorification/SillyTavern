@@ -957,7 +957,7 @@ function registerReasoningSlashCommands() {
                 <strong>Example:</strong>
                 <ul>
                     <li>
-                        <pre><code class="language-stscript">/reasoning-template DeepSeek R1</code></pre>
+                        <pre><code class="language-stscript">/reasoning-template DeepSeek</code></pre>
                     </li>
                 </ul>
             </div>

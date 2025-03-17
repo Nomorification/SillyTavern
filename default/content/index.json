@@ -788,7 +788,11 @@
         "type": "context"
     },
     {
-        "filename": "presets/reasoning/DeepSeek R1.json",
+        "filename": "presets/reasoning/DeepSeek.json",
+        "type": "reasoning"
+    },
+    {
+        "filename": "presets/reasoning/Blank.json",
         "type": "reasoning"
     }
 ]
