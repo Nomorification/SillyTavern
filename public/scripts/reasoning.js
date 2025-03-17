@@ -1,5 +1,4 @@
 import {
-    Fuse,
     moment,
 } from '../lib.js';
 import { chat, closeMessageEditor, event_types, eventSource, main_api, messageFormatting, saveChatConditional, saveChatDebounced, saveSettingsDebounced, substituteParams, syncMesToSwipe, updateMessageBlock } from '../script.js';
@@ -8,7 +7,7 @@ import { getCurrentLocale, t, translate } from './i18n.js';
 import { MacrosParser } from './macros.js';
 import { chat_completion_sources, getChatCompletionModel, oai_settings } from './openai.js';
 import { Popup } from './popup.js';
-import { power_user } from './power-user.js';
+import { performFuzzySearch, power_user } from './power-user.js';
 import { SlashCommand } from './slash-commands/SlashCommand.js';
 import { ARGUMENT_TYPE, SlashCommandArgument, SlashCommandNamedArgument } from './slash-commands/SlashCommandArgument.js';
 import { commonEnumProviders, enumIcons } from './slash-commands/SlashCommandCommonEnumsProvider.js';
@@ -91,7 +90,7 @@ export function extractReasoningFromData(data, {
     mainApi = null,
     ignoreShowThoughts = false,
     textGenType = null,
-    chatCompletionSource = null
+    chatCompletionSource = null,
 } = {}) {
     switch (mainApi ?? main_api) {
         case 'textgenerationwebui':
@@ -781,8 +780,7 @@ function selectReasoningTemplateCallback(args, name) {
     let foundName = templateNames.find(x => x.toLowerCase() === name.toLowerCase());
 
     if (!foundName) {
-        const fuse = new Fuse(templateNames);
-        const result = fuse.search(name);
+        const result = performFuzzySearch('reasoning-templates', templateNames, [], name);
 
         if (result.length === 0) {
             !quiet && toastr.warning(`Reasoning template "${name}" not found`);
