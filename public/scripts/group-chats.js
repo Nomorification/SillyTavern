@@ -696,7 +696,7 @@ export function getGroupBlock(group) {
     template.find('.group_fav_icon').css('display', 'none');
     template.addClass(group.fav ? 'is_fav' : '');
     template.find('.ch_fav').val(group.fav);
-    template.find('.group_select_counter').text(`${count} ${count != 1 ? 'characters' : 'character'}`);
+    template.find('.group_select_counter').text(count + ' ' + (count != 1 ? t`characters` : t`character`));
     template.find('.group_select_block_list').text(namesList.join(', '));
 
     // Display inline tags

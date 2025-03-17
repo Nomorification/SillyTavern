@@ -800,7 +800,7 @@ async function selectCurrentPersona({ toastPersonaNameChange = true } = {}) {
             chat_metadata['persona'] = user_avatar;
             console.log(`Auto locked persona to ${user_avatar}`);
             if (toastPersonaNameChange && power_user.persona_show_notifications) {
-                toastr.success(`Persona ${personaName} selected and auto-locked to current chat`, t`Persona Selected`);
+                toastr.success(t`Persona ${personaName} selected and auto-locked to current chat`, t`Persona Selected`);
             }
             saveMetadataDebounced();
             updatePersonaUIStates();

@@ -358,7 +358,7 @@ export async function convertSoloToGroupChat() {
     // Click on the freshly selected group to open it
     await openGroupById(group.id);
 
-    toastr.success('The chat has been successfully converted!');
+    toastr.success(t`The chat has been successfully converted!`);
 }
 
 /**

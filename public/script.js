@@ -1023,7 +1023,7 @@ export function displayOnlineStatus() {
         $('.online_status_text').text($('#API-status-top').attr('no_connection_text'));
     } else {
         $('.online_status_indicator').addClass('success');
-        $('.online_status_text').text(online_status);
+        $('.online_status_text').text(t([online_status]));
     }
 }
 
@@ -10537,7 +10537,7 @@ jQuery(async function () {
         e.stopPropagation();
         chat_file_for_del = $(this).attr('file_name');
         console.debug('detected cross click for' + chat_file_for_del);
-        callPopup('<h3>Delete the Chat File?</h3>', 'del_chat');
+        callPopup('<h3>' + t`Delete the Chat File?` + '</h3>', 'del_chat');
     });
 
     $('#advanced_div').click(function () {
