@@ -2154,7 +2154,7 @@ function migrateSettings() {
             imgElement.src = '';
         }
 
-        setExpressionOverrideHtml();
+        setExpressionOverrideHtml(true); // force-clear, as the character might not have an override defined
 
         if (isVisualNovelMode()) {
             $('#visual-novel-wrapper').empty();
