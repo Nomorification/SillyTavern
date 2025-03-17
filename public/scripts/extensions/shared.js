@@ -323,6 +323,7 @@ export class ConnectionManagerRequestService {
                         max_tokens: maxTokens,
                         model: profile.model,
                         chat_completion_source: selectedApiMap.source,
+                        custom_url: profile['api-url'],
                     }, {
                         presetName: includePreset ? profile.preset : undefined,
                     }, extractData);

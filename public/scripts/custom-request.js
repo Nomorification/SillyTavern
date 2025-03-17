@@ -41,6 +41,7 @@ import { formatInstructModeChat, formatInstructModePrompt, names_behavior_types 
  * @property {string} chat_completion_source - Source provider for chat completion
  * @property {number} max_tokens - Maximum number of tokens to generate
  * @property {number} [temperature] - Optional temperature parameter for response randomness
+ * @property {string} [custom_url] - Optional custom URL for chat completion
  */
 
 /** @typedef {Record<string, any> & ChatCompletionPayloadBase} ChatCompletionPayload */
@@ -264,7 +265,7 @@ export class ChatCompletionService {
      * @param {ChatCompletionPayload} custom
      * @returns {ChatCompletionPayload}
      */
-    static createRequestData({ messages, model, chat_completion_source, max_tokens, temperature, ...props }) {
+    static createRequestData({ messages, model, chat_completion_source, max_tokens, temperature, custom_url, ...props }) {
         const payload = {
             ...props,
             messages,
@@ -272,6 +273,7 @@ export class ChatCompletionService {
             chat_completion_source,
             max_tokens,
             temperature,
+            custom_url,
             stream: false,
         };
 
