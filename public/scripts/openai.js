@@ -4437,9 +4437,9 @@ async function onModelChange() {
     if (oai_settings.chat_completion_source === chat_completion_sources.MISTRALAI) {
         if (oai_settings.max_context_unlocked) {
             $('#openai_max_context').attr('max', unlocked_max);
-        } else if (oai_settings.mistralai_model.includes('codestral-mamba')) {
+        } else if (['codestral-latest', 'codestral-mamba-2407', 'codestral-2411-rc5', 'codestral-2412', 'codestral-2501'].includes(oai_settings.mistralai_model)) {
             $('#openai_max_context').attr('max', max_256k);
-        } else if (['mistral-large-2407', 'mistral-large-2411', 'mistral-large-latest'].includes(oai_settings.mistralai_model)) {
+        } else if (['mistral-large-2407', 'mistral-large-2411', 'mistral-large-pixtral-2411', 'mistral-large-latest'].includes(oai_settings.mistralai_model)) {
             $('#openai_max_context').attr('max', max_128k);
         } else if (oai_settings.mistralai_model.includes('mistral-nemo')) {
             $('#openai_max_context').attr('max', max_128k);
