@@ -495,6 +495,8 @@ export const event_types = {
     GENERATE_AFTER_COMBINE_PROMPTS: 'generate_after_combine_prompts',
     GENERATE_AFTER_DATA: 'generate_after_data',
     GROUP_MEMBER_DRAFTED: 'group_member_drafted',
+    GROUP_WRAPPER_STARTED: 'group_wrapper_started',
+    GROUP_WRAPPER_FINISHED: 'group_wrapper_finished',
     WORLD_INFO_ACTIVATED: 'world_info_activated',
     TEXT_COMPLETION_SETTINGS_READY: 'text_completion_settings_ready',
     CHAT_COMPLETION_SETTINGS_READY: 'chat_completion_settings_ready',
@@ -3098,6 +3100,9 @@ export function baseChatReplace(value, name1, name2) {
 
 /**
  * Returns the character card fields for the current character.
+ * @param {object} [options]
+ * @param {number} [options.chid] Optional character index
+ *
  * @typedef {object} CharacterCardFields
  * @property {string} system System prompt
  * @property {string} mesExamples Message examples
@@ -3110,7 +3115,9 @@ export function baseChatReplace(value, name1, name2) {
  * @property {string} charDepthPrompt Character depth note
  * @returns {CharacterCardFields} Character card fields
  */
-export function getCharacterCardFields() {
+export function getCharacterCardFields({ chid = null } = {}) {
+    const currentChid = chid ?? this_chid;
+
     const result = {
         system: '',
         mesExamples: '',
@@ -3124,7 +3131,7 @@ export function getCharacterCardFields() {
     };
     result.persona = baseChatReplace(power_user.persona_description?.trim(), name1, name2);
 
-    const character = characters[this_chid];
+    const character = characters[currentChid];
 
     if (!character) {
         return result;
@@ -3141,7 +3148,7 @@ export function getCharacterCardFields() {
     result.charDepthPrompt = baseChatReplace(character.data?.extensions?.depth_prompt?.prompt?.trim(), name1, name2);
 
     if (selected_group) {
-        const groupCards = getGroupCharacterCards(selected_group, Number(this_chid));
+        const groupCards = getGroupCharacterCards(selected_group, Number(currentChid));
 
         if (groupCards) {
             result.description = groupCards.description;

@@ -904,6 +904,7 @@ async function generateGroupWrapper(by_auto_mode, type = null, params = {}) {
                 groupChatQueueOrder.set(characters[activatedMembers[i]].avatar, i + 1);
             }
         }
+        await eventSource.emit(event_types.GROUP_WRAPPER_STARTED, { selected_group, type });
         // now the real generation begins: cycle through every activated character
         for (const chId of activatedMembers) {
             throwIfAborted();
@@ -942,6 +943,7 @@ async function generateGroupWrapper(by_auto_mode, type = null, params = {}) {
         setCharacterName('');
         activateSendButtons();
         showSwipeButtons();
+        await eventSource.emit(event_types.GROUP_WRAPPER_FINISHED,  { selected_group, type });
     }
 
     return Promise.resolve(textResult);
