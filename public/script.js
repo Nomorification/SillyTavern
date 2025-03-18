@@ -2746,6 +2746,7 @@ export function substituteParams(content, _name1, _name2, _original, _group, _re
         environment.mesExamplesRaw = fields.mesExamples || '';
         environment.charVersion = fields.version || '';
         environment.char_version = fields.version || '';
+        environment.charDepthPrompt = fields.charDepthPrompt || '';
     }
 
     // Must be substituted last so that they're replaced inside {{description}}
@@ -3097,10 +3098,30 @@ export function baseChatReplace(value, name1, name2) {
 
 /**
  * Returns the character card fields for the current character.
- * @returns {{system: string, mesExamples: string, description: string, personality: string, persona: string, scenario: string, jailbreak: string, version: string}}
+ * @typedef {object} CharacterCardFields
+ * @property {string} system System prompt
+ * @property {string} mesExamples Message examples
+ * @property {string} description Description
+ * @property {string} personality Personality
+ * @property {string} persona Persona
+ * @property {string} scenario Scenario
+ * @property {string} jailbreak Jailbreak instructions
+ * @property {string} version Character version
+ * @property {string} charDepthPrompt Character depth note
+ * @returns {CharacterCardFields} Character card fields
  */
 export function getCharacterCardFields() {
-    const result = { system: '', mesExamples: '', description: '', personality: '', persona: '', scenario: '', jailbreak: '', version: '' };
+    const result = {
+        system: '',
+        mesExamples: '',
+        description: '',
+        personality: '',
+        persona: '',
+        scenario: '',
+        jailbreak: '',
+        version: '',
+        charDepthPrompt: '',
+    };
     result.persona = baseChatReplace(power_user.persona_description?.trim(), name1, name2);
 
     const character = characters[this_chid];
@@ -3117,6 +3138,7 @@ export function getCharacterCardFields() {
     result.system = power_user.prefer_character_prompt ? baseChatReplace(character.data?.system_prompt?.trim(), name1, name2) : '';
     result.jailbreak = power_user.prefer_character_jailbreak ? baseChatReplace(character.data?.post_history_instructions?.trim(), name1, name2) : '';
     result.version = character.data?.character_version ?? '';
+    result.charDepthPrompt = baseChatReplace(character.data?.extensions?.depth_prompt?.prompt?.trim(), name1, name2);
 
     if (selected_group) {
         const groupCards = getGroupCharacterCards(selected_group, Number(this_chid));
@@ -3922,6 +3944,7 @@ export async function Generate(type, { automatic_trigger, force_name2, quiet_pro
         mesExamples,
         system,
         jailbreak,
+        charDepthPrompt,
     } = getCharacterCardFields();
 
     if (main_api !== 'openai') {
@@ -3944,7 +3967,7 @@ export async function Generate(type, { automatic_trigger, force_name2, quiet_pro
             setExtensionPrompt('DEPTH_PROMPT_' + index, value.text, extension_prompt_types.IN_CHAT, value.depth, extension_settings.note.allowWIScan, role);
         });
     } else {
-        const depthPromptText = baseChatReplace(characters[this_chid]?.data?.extensions?.depth_prompt?.prompt?.trim(), name1, name2) || '';
+        const depthPromptText = charDepthPrompt || '';
         const depthPromptDepth = characters[this_chid]?.data?.extensions?.depth_prompt?.depth ?? depth_prompt_depth_default;
         const depthPromptRole = getExtensionPromptRoleByName(characters[this_chid]?.data?.extensions?.depth_prompt?.role ?? depth_prompt_role_default);
         setExtensionPrompt('DEPTH_PROMPT', depthPromptText, extension_prompt_types.IN_CHAT, depthPromptDepth, extension_settings.note.allowWIScan, depthPromptRole);
