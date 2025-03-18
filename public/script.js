@@ -5885,14 +5885,14 @@ function extractMultiSwipes(data, type) {
     return swipes;
 }
 
-export function cleanUpMessage(getMessage, isImpersonate, isContinue, displayIncompleteSentences = false, stoppingStrings = null, include_user_prompt_bias=true) {
+export function cleanUpMessage(getMessage, isImpersonate, isContinue, displayIncompleteSentences = false, stoppingStrings = null, includeUserPromptBias = true) {
     if (!getMessage) {
         return '';
     }
 
     // Add the prompt bias before anything else
     if (
-        include_user_prompt_bias &&
+        includeUserPromptBias &&
         power_user.user_prompt_bias &&
         !isImpersonate &&
         !isContinue &&
