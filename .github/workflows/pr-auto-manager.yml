@@ -1,7 +1,8 @@
 name: 🔀 Pull Request Manager
 
 on:
-  pull_request_target:
+  workflow_dispatch:
+  pull_request: # TODO: This is for texting, and should not be merged into staging. Staging should use 'pull_request_target'
     types: [opened, synchronize, reopened, edited, labeled, unlabeled, closed]
   pull_request_review_comment:
     types: [created]
@@ -14,14 +15,16 @@ jobs:
   label-by-size:
     name: 🏷️ Label PR by Size
     runs-on: ubuntu-latest
+    # Only needs to run when code is changed
+    if: github.event.action == 'opened' || github.event.action == 'synchronize'
 
     steps:
       - name: Label PR Size
         # Pull Request Size Labeler
         # https://github.com/marketplace/actions/pull-request-size-labeler
-        uses: codelytv/pr-size-labeler@v1.10.1
+        uses: codelytv/pr-size-labeler@v1.10.2
         with:
-          GITHUB_TOKEN: ${{ secrets.BOT_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           xs_label: '🟩 ⬤○○○○'
           xs_max_size: '20'
           s_label: '🟩 ⬤⬤○○○'
@@ -32,7 +35,6 @@ jobs:
           l_max_size: '1000'
           xl_label: '🟥 ⬤⬤⬤⬤⬤'
           fail_if_xl: 'false'
-          github_api_url: 'https://api.github.com'
           files_to_ignore: |
             "package-lock.json"
             "public/lib/*"
@@ -40,8 +42,8 @@ jobs:
   label-by-branches:
     name: 🏷️ Label PR by Branches
     runs-on: ubuntu-latest
-    # Only label once when PR is created or branches are changed, to allow manual label removal
-    if: github.event.action == 'opened' || (github.event.action == 'synchronize' && (github.event.changes.base || github.event.changes.head))
+    # Only label once when PR is created or when base branch is changed, to allow manual label removal
+    if: github.event.action == 'opened' || (github.event.action == 'synchronize' && github.event.changes.base)
 
     steps:
       - name: Checkout Repository
@@ -55,11 +57,13 @@ jobs:
         uses: actions/labeler@v5.0.0
         with:
           configuration-path: .github/pr-auto-labels-by-branch.yml
-          repo-token: ${{ secrets.BOT_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
 
   label-by-files:
     name: 🏷️ Label PR by Files
     runs-on: ubuntu-latest
+    # Only needs to run when code is changed
+    if: github.event.action == 'opened' || github.event.action == 'synchronize'
 
     steps:
       - name: Checkout Repository
@@ -73,12 +77,12 @@ jobs:
         uses: actions/labeler@v5.0.0
         with:
           configuration-path: .github/pr-auto-labels-by-files.yml
-          repo-token: ${{ secrets.BOT_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
 
   remove-stale-label:
     name: 🗑️ Remove Stale Label on Comment
     runs-on: ubuntu-latest
-    # Only runs when this is not done by the github actions bot
+    # Only runs on comments not done by the github actions bot
     if: github.event_name == 'pull_request_review_comment' && github.actor != 'github-actions[bot]'
 
     steps:
@@ -88,7 +92,7 @@ jobs:
         uses: actions-cool/issues-helper@v3.6.0
         with:
           actions: 'remove-labels'
-          token: ${{ secrets.BOT_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           issue-number: ${{ github.event.pull_request.number }}
           labels: '⚰️ Stale'
 
@@ -161,7 +165,7 @@ jobs:
         uses: peaceiris/actions-label-commenter@v1.10.0
         with:
           config_file: .github/pr-auto-comments.yml
-          github_token: ${{ secrets.BOT_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
 
   # This runs on merged PRs to staging, reading the PR body and directly linked issues. Check `issues-updates-on-merge.yml`:`update-linked-issues` for commit-based updates.
   update-linked-issues:
@@ -182,7 +186,7 @@ jobs:
           PR_NUMBER=${{ github.event.pull_request.number }}
           REPO=${{ github.repository }}
           API_URL="https://api.github.com/repos/$REPO/pulls/$PR_NUMBER/issues"
-          ISSUES=$(curl -s -H "Authorization: token ${{ secrets.BOT_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}" "$API_URL" | jq -r '.[].number' | jq -R -s -c 'split("\n")[:-1]')
+          ISSUES=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" "$API_URL" | jq -r '.[].number' | jq -R -s -c 'split("\n")[:-1]')
           echo "linked_issues=$ISSUES" >> $GITHUB_ENV
 
       - name: Merge Issue Lists
@@ -194,7 +198,7 @@ jobs:
       - name: Label Linked Issues
         id: label_linked_issues
         env:
-          GH_TOKEN: ${{ secrets.BOT_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           for ISSUE in $(echo $final_issues | jq -r '.[]'); do
             gh issue edit $ISSUE -R ${{ github.repository }} --add-label "✅ Done (staging)"
