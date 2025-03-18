@@ -6757,7 +6757,7 @@ export function saveChatDebounced() {
  * @returns {Promise<void>}
  */
 export async function saveChat({ chatName, withMetadata, mesId, force = false } = {}) {
-    if (arguments.length > 1 && typeof arguments[0] !== 'object') {
+    if (arguments.length > 0 && typeof arguments[0] !== 'object') {
         console.trace('saveChat called with positional arguments. Please use an object instead.');
         [chatName, withMetadata, mesId, force] = arguments;
     }
