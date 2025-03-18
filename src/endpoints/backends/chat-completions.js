@@ -1048,6 +1048,15 @@ router.post('/generate', function (request, response) {
     let bodyParams;
     const isTextCompletion = Boolean(request.body.model && TEXT_COMPLETION_MODELS.includes(request.body.model)) || typeof request.body.messages === 'string';
 
+    const postProcessTypes = [CHAT_COMPLETION_SOURCES.CUSTOM, CHAT_COMPLETION_SOURCES.OPENROUTER];
+    if (Array.isArray(request.body.messages) && postProcessTypes.includes(request.body.chat_completion_source) && request.body.custom_prompt_post_processing) {
+        console.info('Applying custom prompt post-processing of type', request.body.custom_prompt_post_processing);
+        request.body.messages = postProcessPrompt(
+            request.body.messages,
+            request.body.custom_prompt_post_processing,
+            getPromptNames(request));
+    }
+
     if (request.body.chat_completion_source === CHAT_COMPLETION_SOURCES.OPENAI) {
         apiUrl = new URL(request.body.reverse_proxy || API_OPENAI).toString();
         apiKey = request.body.reverse_proxy ? request.body.proxy_password : readSecret(request.user.directories, SECRET_KEYS.OPENAI);
@@ -1150,15 +1159,6 @@ router.post('/generate', function (request, response) {
     } else {
         console.warn('This chat completion source is not supported yet.');
         return response.status(400).send({ error: true });
-    }
-
-    const postProcessTypes = [CHAT_COMPLETION_SOURCES.CUSTOM, CHAT_COMPLETION_SOURCES.OPENROUTER];
-    if (postProcessTypes.includes(request.body.chat_completion_source) && request.body.custom_prompt_post_processing) {
-        console.info('Applying custom prompt post-processing of type', request.body.custom_prompt_post_processing);
-        request.body.messages = postProcessPrompt(
-            request.body.messages,
-            request.body.custom_prompt_post_processing,
-            getPromptNames(request));
     }
 
     // A few of OpenAIs reasoning models support reasoning effort
