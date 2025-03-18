@@ -2020,6 +2020,7 @@ async function sendOpenAIRequest(type, messages, signal) {
         'reasoning_effort': String(oai_settings.reasoning_effort),
         'enable_web_search': Boolean(oai_settings.enable_web_search),
         'request_images': Boolean(oai_settings.request_images),
+        'custom_prompt_post_processing': oai_settings.custom_prompt_post_processing,
     };
 
     if (!canMultiSwipe && ToolManager.canPerformToolCalls(type)) {
@@ -2100,7 +2101,6 @@ async function sendOpenAIRequest(type, messages, signal) {
         generate_data['custom_include_body'] = oai_settings.custom_include_body;
         generate_data['custom_exclude_body'] = oai_settings.custom_exclude_body;
         generate_data['custom_include_headers'] = oai_settings.custom_include_headers;
-        generate_data['custom_prompt_post_processing'] = oai_settings.custom_prompt_post_processing;
     }
 
     if (isCohere) {

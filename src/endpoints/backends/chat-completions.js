@@ -1121,14 +1121,6 @@ router.post('/generate', function (request, response) {
 
         mergeObjectWithYaml(bodyParams, request.body.custom_include_body);
         mergeObjectWithYaml(headers, request.body.custom_include_headers);
-
-        if (request.body.custom_prompt_post_processing) {
-            console.info('Applying custom prompt post-processing of type', request.body.custom_prompt_post_processing);
-            request.body.messages = postProcessPrompt(
-                request.body.messages,
-                request.body.custom_prompt_post_processing,
-                getPromptNames(request));
-        }
     } else if (request.body.chat_completion_source === CHAT_COMPLETION_SOURCES.PERPLEXITY) {
         apiUrl = API_PERPLEXITY;
         apiKey = readSecret(request.user.directories, SECRET_KEYS.PERPLEXITY);
@@ -1158,6 +1150,15 @@ router.post('/generate', function (request, response) {
     } else {
         console.warn('This chat completion source is not supported yet.');
         return response.status(400).send({ error: true });
+    }
+
+    const postProcessTypes = [CHAT_COMPLETION_SOURCES.CUSTOM, CHAT_COMPLETION_SOURCES.OPENROUTER];
+    if (postProcessTypes.includes(request.body.chat_completion_source) && request.body.custom_prompt_post_processing) {
+        console.info('Applying custom prompt post-processing of type', request.body.custom_prompt_post_processing);
+        request.body.messages = postProcessPrompt(
+            request.body.messages,
+            request.body.custom_prompt_post_processing,
+            getPromptNames(request));
     }
 
     // A few of OpenAIs reasoning models support reasoning effort
