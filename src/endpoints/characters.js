@@ -39,6 +39,35 @@ const diskCache = {
      */
     _instance: null,
     /**
+     * @type {NodeJS.Timeout?}
+     * @private
+     */
+    _removalInterval: null,
+    /**
+     * Processes the removal queue.
+     * @returns {Promise<void>}
+     * @private
+     */
+    _removeCacheEntries: async function() {
+        try {
+            if (!useDiskCache || this.removalQueue.length === 0) {
+                return;
+            }
+
+            const keys = await diskCache.instance().then(i => i.keys());
+            for (const item of this.removalQueue) {
+                const key = keys.find(k => k.startsWith(item));
+                if (key) {
+                    await diskCache.instance().then(i => i.removeItem(key));
+                }
+            }
+            console.info('Removed cache entries:', this.removalQueue);
+            this.removalQueue = [];
+        } catch (error) {
+            console.error('Error while removing cache entries:', error);
+        }
+    },
+    /**
      * Gets the disk cache instance.
      * @returns {Promise<import('node-persist').LocalStorage>}
      */
@@ -50,8 +79,14 @@ const diskCache = {
         const cacheDir = path.join(globalThis.DATA_ROOT, '_cache', 'characters');
         this._instance = storage.create({ dir: cacheDir, ttl: false });
         await this._instance.init();
+        this._removalInterval = setInterval(this._removeCacheEntries.bind(this), 60000);
         return this._instance;
     },
+    /**
+     * Queue for removal of cache entries.
+     * @type {string[]}
+     */
+    removalQueue: [],
 };
 
 /**
@@ -131,15 +166,8 @@ async function writeCharacterData(inputFile, data, outputFile, request, crop = u
             }
         }
         if (useDiskCache && !Buffer.isBuffer(inputFile)) {
-            const keys = await diskCache.instance().then(i => i.keys());
-            for (const key of keys) {
-                if (key.startsWith(inputFile)) {
-                    await diskCache.instance().then(i => i.removeItem(key));
-                    break;
-                }
-            }
+            diskCache.removalQueue.push(inputFile);
         }
-
         /**
          * Read the image, resize, and save it as a PNG into the buffer.
          * @returns {Promise<Buffer>} Image buffer
