@@ -61,7 +61,6 @@ const diskCache = {
                     await diskCache.instance().then(i => i.removeItem(key));
                 }
             }
-            console.info('Removed cache entries:', this.removalQueue);
             this.removalQueue.clear();
         } catch (error) {
             console.error('Error while removing cache entries:', error);
