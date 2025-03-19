@@ -1011,7 +1011,7 @@ export async function getExpressionLabel(text, expressionsApi = extension_settin
 
     filterAvailable ??= extension_settings.expressions.filterAvailable;
     if (filterAvailable && ![EXPRESSION_API.llm, EXPRESSION_API.webllm].includes(expressionsApi)) {
-        console.warn('Filter available is only supported for LLM and WebLLM expressions');
+        console.debug('Filter available is only supported for LLM and WebLLM expressions');
     }
 
     try {
