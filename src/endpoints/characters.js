@@ -30,7 +30,7 @@ const memoryCache = new MemoryLimitedMap(memoryCacheCapacity);
 const isAndroid = process.platform === 'android';
 // Use shallow character data for the character list
 const useShallowCharacters = !!getConfigValue('performance.lazyLoadCharacters', false, 'boolean');
-const useDiskCache = !!getConfigValue('performance.useDiskCache', false, 'boolean');
+const useDiskCache = !!getConfigValue('performance.useDiskCache', true, 'boolean');
 
 const diskCache = {
     /**
