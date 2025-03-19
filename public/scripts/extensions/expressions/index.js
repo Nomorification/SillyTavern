@@ -4,7 +4,7 @@ import { characters, eventSource, event_types, generateRaw, getRequestHeaders, m
 import { dragElement, isMobile } from '../../RossAscends-mods.js';
 import { getContext, getApiUrl, modules, extension_settings, ModuleWorkerWrapper, doExtrasFetch, renderExtensionTemplateAsync } from '../../extensions.js';
 import { loadMovingUIState, performFuzzySearch, power_user } from '../../power-user.js';
-import { onlyUnique, debounce, getCharaFilename, trimToEndSentence, trimToStartSentence, waitUntilCondition, findChar, isTrueBoolean } from '../../utils.js';
+import { onlyUnique, debounce, getCharaFilename, trimToEndSentence, trimToStartSentence, waitUntilCondition, findChar, isFalseBoolean } from '../../utils.js';
 import { hideMutedSprites, selected_group } from '../../group-chats.js';
 import { isJsonSchemaSupported } from '../../textgen-settings.js';
 import { debounce_timeout } from '../../constants.js';
@@ -690,7 +690,7 @@ async function classifyCallback(/** @type {{api: string?, filter: string?, promp
     }
 
     const expressionApi = EXPRESSION_API[api] || extension_settings.expressions.api;
-    const filterAvailable = isTrueBoolean(filter);
+    const filterAvailable = !isFalseBoolean(filter);
 
     if (!modules.includes('classify') && expressionApi == EXPRESSION_API.extras) {
         toastr.warning('Text classification is disabled or not available');
@@ -2307,13 +2307,13 @@ function migrateSettings() {
     SlashCommandParser.addCommandObject(SlashCommand.fromProps({
         name: 'expression-list',
         aliases: ['expressions'],
-        /** @type {(args: {return: string, filterAvailable: string}) => Promise<string>} */
+        /** @type {(args: {return: string, filter: string}) => Promise<string>} */
         callback: async (args) => {
             let returnType =
                 /** @type {import('../../slash-commands/SlashCommandReturnHelper.js').SlashCommandReturnType} */
                 (args.return);
 
-            const list = await getExpressionsList({ filterAvailable: isTrueBoolean(args.filterAvailable) });
+            const list = await getExpressionsList({ filterAvailable: !isFalseBoolean(args.filter) });
 
             return await slashCommandReturnHelper.doReturn(returnType ?? 'pipe', list, { objectToStringFunc: list => list.join(', ') });
         },
