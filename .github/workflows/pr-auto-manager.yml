@@ -186,6 +186,12 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event.pull_request.merged == true && github.event.pull_request.base.ref == 'staging'
 
+    # Override permissions, We need to be able to write to issues
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+
     steps:
       - name: Extract Linked Issues From PR Description
         id: extract_issues
