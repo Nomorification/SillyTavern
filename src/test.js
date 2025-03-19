@@ -1,0 +1,4 @@
+const test={
+"FOO":"BAR"
+}
+
