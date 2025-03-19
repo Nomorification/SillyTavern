@@ -783,7 +783,7 @@ router.post('/search', validateAvatarUrlMiddleware, function (request, response)
                 continue;
             }
 
-            // Search through chats
+            // Search through title and messages of the chat
             const fragments = query.trim().toLowerCase().split(/\s+/).filter(x => x);
             const text = [chatFile.path.split(/[\\\/]/).pop().replace(/.jsonl$/, ''),
                 ...messages.map(message => message?.mes)].join("\n").toLowerCase();
