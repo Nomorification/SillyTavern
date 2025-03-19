@@ -77,6 +77,7 @@ import { slashCommandReturnHelper } from './slash-commands/SlashCommandReturnHel
 import { accountStorage } from './util/AccountStorage.js';
 import { SlashCommandDebugController } from './slash-commands/SlashCommandDebugController.js';
 import { SlashCommandScope } from './slash-commands/SlashCommandScope.js';
+import { t } from './i18n.js';
 export {
     executeSlashCommands, executeSlashCommandsWithOptions, getSlashCommandsHelp, registerSlashCommand,
 };
@@ -1556,16 +1557,28 @@ export function initDefaultSlashCommands() {
     SlashCommandParser.addCommandObject(SlashCommand.fromProps({
         name: 'buttons',
         callback: buttonsCallback,
-        returns: 'clicked button label',
+        returns: 'clicked button label (or array of labels if multiple is enabled)',
         namedArgumentList: [
-            new SlashCommandNamedArgument(
-                'labels', 'button labels', [ARGUMENT_TYPE.LIST], true,
-            ),
+            SlashCommandNamedArgument.fromProps({
+                name: 'labels',
+                description: 'button labels',
+                typeList: [ARGUMENT_TYPE.LIST],
+                isRequired: true,
+            }),
+            SlashCommandNamedArgument.fromProps({
+                name: 'multiple',
+                description: 'if enabled multiple buttons can be clicked/toggled, and all clicked buttons are returned as an array',
+                typeList: [ARGUMENT_TYPE.BOOLEAN],
+                enumList: commonEnumProviders.boolean('trueFalse')(),
+                defaultValue: 'false',
+            }),
         ],
         unnamedArgumentList: [
-            new SlashCommandArgument(
-                'text', [ARGUMENT_TYPE.STRING], true,
-            ),
+            SlashCommandArgument.fromProps({
+                description: 'text',
+                typeList: [ARGUMENT_TYPE.STRING],
+                isRequired: true,
+            }),
         ],
         helpString: `
         <div>
@@ -2377,6 +2390,18 @@ async function trimTokensCallback(arg, value) {
     }
 }
 
+/**
+ * Displays a popup with buttons based on provided labels and handles button interactions.
+ *
+ * @param {object} args - Named arguments for the command
+ * @param {string} args.labels - JSON string of an array of button labels
+ * @param {string} [args.multiple=false] - Flag indicating if multiple buttons can be toggled
+ * @param {string} text - The text content to be displayed within the popup
+ *
+ * @returns {Promise<string>} - A promise that resolves to a string of the button labels selected
+ *                              If 'multiple' is true, returns a JSON string array of labels.
+ *                              If 'multiple' is false, returns a single label string.
+ */
 async function buttonsCallback(args, text) {
     try {
         /** @type {string[]} */
@@ -2386,6 +2411,10 @@ async function buttonsCallback(args, text) {
             console.warn('WARN: Invalid labels provided for /buttons command');
             return '';
         }
+
+        /** @type {Set<number>} */
+        const multipleToggledState = new Set();
+        const multiple = isTrueBoolean(args?.multiple);
 
         // Map custom buttons to results. Start at 2 because 1 and 0 are reserved for ok and cancel
         const resultToButtonMap = new Map(buttons.map((button, index) => [index + 2, button]));
@@ -2404,11 +2433,24 @@ async function buttonsCallback(args, text) {
 
             for (const [result, button] of resultToButtonMap) {
                 const buttonElement = document.createElement('div');
-                buttonElement.classList.add('menu_button', 'result-control', 'wide100p');
-                buttonElement.dataset.result = String(result);
-                buttonElement.addEventListener('click', async () => {
-                    await popup.complete(result);
-                });
+                buttonElement.classList.add('menu_button', 'wide100p');
+
+                if (multiple) {
+                    buttonElement.classList.add('toggleable');
+                    buttonElement.dataset.toggleValue = String(result);
+                    buttonElement.addEventListener('click', async () => {
+                        buttonElement.classList.toggle('toggled');
+                        if (buttonElement.classList.contains('toggled')) {
+                            multipleToggledState.add(result);
+                        } else {
+                            multipleToggledState.delete(result);
+                        }
+                    });
+                } else {
+                    buttonElement.classList.add('result-control');
+                    buttonElement.dataset.result = String(result);
+                }
+
                 buttonElement.innerText = button;
                 buttonContainer.appendChild(buttonElement);
             }
@@ -2424,10 +2466,18 @@ async function buttonsCallback(args, text) {
             popupContainer.style.flexDirection = 'column';
             popupContainer.style.maxHeight = '80vh'; // Limit the overall height of the popup
 
-            popup = new Popup(popupContainer, POPUP_TYPE.TEXT, '', { okButton: 'Cancel', allowVerticalScrolling: true });
+            popup = new Popup(popupContainer, POPUP_TYPE.TEXT, '', { okButton: multiple ? t`Ok` : t`Cancel`, allowVerticalScrolling: true });
             popup.show()
-                .then((result => resolve(typeof result === 'number' ? resultToButtonMap.get(result) ?? '' : '')))
+                .then((result => resolve(getResult(result))))
                 .catch(() => resolve(''));
+
+            /** @returns {string} @param {string|number|boolean} result */
+            function getResult(result) {
+                if (multiple) {
+                    return JSON.stringify(Array.from(multipleToggledState).map(r => resultToButtonMap.get(r) ?? ''));
+                }
+                return typeof result === 'number' ? resultToButtonMap.get(result) ?? '' : '';
+            }
         });
     } catch {
         return '';
