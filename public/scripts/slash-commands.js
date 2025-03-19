@@ -75,6 +75,8 @@ import { SlashCommandBreakController } from './slash-commands/SlashCommandBreakC
 import { SlashCommandExecutionError } from './slash-commands/SlashCommandExecutionError.js';
 import { slashCommandReturnHelper } from './slash-commands/SlashCommandReturnHelper.js';
 import { accountStorage } from './util/AccountStorage.js';
+import { SlashCommandDebugController } from './slash-commands/SlashCommandDebugController.js';
+import { SlashCommandScope } from './slash-commands/SlashCommandScope.js';
 export {
     executeSlashCommands, executeSlashCommandsWithOptions, getSlashCommandsHelp, registerSlashCommand,
 };
@@ -4345,7 +4347,7 @@ const clearCommandProgressDebounced = debounce(clearCommandProgress);
  * @prop {boolean} [handleParserErrors] (true) Whether to handle parser errors (show toast on error) or throw.
  * @prop {SlashCommandScope} [scope] (null) The scope to be used when executing the commands.
  * @prop {boolean} [handleExecutionErrors] (false) Whether to handle execution errors (show toast on error) or throw
- * @prop {{[id:PARSER_FLAG]:boolean}} [parserFlags] (null) Parser flags to apply
+ * @prop {import('./slash-commands/SlashCommandParser.js').ParserFlags} [parserFlags] (null) Parser flags to apply
  * @prop {SlashCommandAbortController} [abortController] (null) Controller used to abort or pause command execution
  * @prop {SlashCommandDebugController} [debugController] (null) Controller used to control debug execution
  * @prop {(done:number, total:number)=>void} [onProgress] (null) Callback to handle progress events
@@ -4355,7 +4357,7 @@ const clearCommandProgressDebounced = debounce(clearCommandProgress);
 /**
  * @typedef ExecuteSlashCommandsOnChatInputOptions
  * @prop {SlashCommandScope} [scope] (null) The scope to be used when executing the commands.
- * @prop {{[id:PARSER_FLAG]:boolean}} [parserFlags] (null) Parser flags to apply
+ * @prop {import('./slash-commands/SlashCommandParser.js').ParserFlags} [parserFlags] (null) Parser flags to apply
  * @prop {boolean} [clearChatInput] (false) Whether to clear the chat input textarea
  * @prop {string} [source] (null) String indicating where the code come from (e.g., QR name)
  */
