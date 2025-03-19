@@ -48,8 +48,7 @@ const diskCache = {
         }
 
         const cacheDir = path.join(globalThis.DATA_ROOT, '_cache', 'characters');
-        const ttl = 7 * 24 * 60 * 60 * 1000; // 7 days
-        this._instance = storage.create({ dir: cacheDir, ttl: ttl });
+        this._instance = storage.create({ dir: cacheDir, ttl: false });
         await this._instance.init();
         return this._instance;
     },
