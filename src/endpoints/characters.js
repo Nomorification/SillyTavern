@@ -55,6 +55,34 @@ const diskCache = {
 };
 
 /**
+ * Verifies disk cache size and prunes it if necessary.
+ * @param {import('../users.js').UserDirectoryList[]} directoriesList List of user directories
+ * @returns {Promise<void>}
+ */
+export async function verifyCharactersDiskCache(directoriesList) {
+    if (!useDiskCache) {
+        return;
+    }
+
+    const cache = await diskCache.instance();
+    const validKeys = [];
+    for (const dir of directoriesList) {
+        const files = fs.readdirSync(dir.characters);
+        for (const file of files) {
+            const filePath = path.join(dir.characters, file);
+            const stat = fs.statSync(filePath);
+            validKeys.push(`${filePath}-${stat.mtimeMs}`);
+        }
+    }
+    const cacheKeys = await cache.keys();
+    for (const key of cacheKeys) {
+        if (!validKeys.includes(key)) {
+            await cache.removeItem(key);
+        }
+    }
+}
+
+/**
  * Reads the character card from the specified image file.
  * @param {string} inputFile - Path to the image file
  * @param {string} inputFormat - 'png'
