@@ -1,17 +1,38 @@
 name: ✅ Check ESLint on PR
 
-on: pull_request
+on:
+  pull_request: # TODO: change to pull_request_target for 'staging'
+    types: [opened, synchronize]
+
+permissions:
+  contents: read
+  pull-requests: write
 
 jobs:
-  eslint:
+  run-eslint:
+    name: ✅ Check ESLint on PR
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Checkout Repository
+        # Checkout
+        # https://github.com/marketplace/actions/checkout
+        uses: actions/checkout@v4.2.2
+
+      - name: Setup Node.js
+        # Setup Node.js environment
+        # https://github.com/marketplace/actions/setup-node-js-environment
+        uses: actions/setup-node@v4.3.0
         with:
           node-version: 20
-      - run: npm ci
-      - uses: sibiraj-s/action-eslint@v3
+
+      - name: Run npm install
+        run: npm ci
+
+      - name: Run ESLint
+        # Action ESLint
+        # https://github.com/marketplace/actions/action-eslint
+        uses: sibiraj-s/action-eslint@v3.0.1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           eslint-args: '--ignore-path=.gitignore --quiet'
