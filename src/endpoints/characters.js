@@ -50,7 +50,7 @@ const diskCache = {
      */
     _removeCacheEntries: async function() {
         try {
-            if (!useDiskCache || this.removalQueue.length === 0) {
+            if (!useDiskCache || this.removalQueue.size === 0) {
                 return;
             }
 
@@ -62,7 +62,7 @@ const diskCache = {
                 }
             }
             console.info('Removed cache entries:', this.removalQueue);
-            this.removalQueue = [];
+            this.removalQueue.clear();
         } catch (error) {
             console.error('Error while removing cache entries:', error);
         }
@@ -84,9 +84,9 @@ const diskCache = {
     },
     /**
      * Queue for removal of cache entries.
-     * @type {string[]}
+     * @type {Set<string>}
      */
-    removalQueue: [],
+    removalQueue: new Set(),
 };
 
 /**
@@ -166,7 +166,7 @@ async function writeCharacterData(inputFile, data, outputFile, request, crop = u
             }
         }
         if (useDiskCache && !Buffer.isBuffer(inputFile)) {
-            diskCache.removalQueue.push(inputFile);
+            diskCache.removalQueue.add(inputFile);
         }
         /**
          * Read the image, resize, and save it as a PNG into the buffer.
