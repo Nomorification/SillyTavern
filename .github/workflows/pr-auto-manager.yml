@@ -161,7 +161,7 @@ jobs:
 
   write-auto-comments:
     name: 💬 Post PR Comments Based on Labels
-    needs: [label-by-size, label-by-branches, label-by-files]
+    needs: [label-by-branches, label-by-files]
     runs-on: ubuntu-latest
     # Run, even if the previous jobs were skipped/failed
     if: always()
