@@ -785,7 +785,7 @@ router.post('/search', validateAvatarUrlMiddleware, function (request, response)
 
             // Search through chats
             const fragments = query.trim().toLowerCase().split(/\s+/).filter(x => x);
-            const text = messages.map(message => message?.mes).join('').toLowerCase();
+            const text = messages.map(message => message?.mes).join("\n").toLowerCase();
             const stem = chatFile.path.toLowerCase().split(/[\\\/]/).pop().replace(/.jsonl$/, '');
             const hasMatch = fragments.every(fragment => (stem + text).includes(fragment));
 
