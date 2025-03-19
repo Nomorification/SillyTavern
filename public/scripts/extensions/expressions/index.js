@@ -17,6 +17,7 @@ import { slashCommandReturnHelper } from '../../slash-commands/SlashCommandRetur
 import { generateWebLlmChatPrompt, isWebLlmSupported } from '../shared.js';
 import { Popup, POPUP_RESULT } from '../../popup.js';
 import { t } from '../../i18n.js';
+import { removeReasoningFromString } from '../../reasoning.js';
 export { MODULE_NAME };
 
 /**
@@ -928,6 +929,9 @@ function parseLlmResponse(emotionResponse, labels) {
 
         return response;
     } catch {
+        // Clean possible reasoning from response
+        emotionResponse = removeReasoningFromString(emotionResponse);
+
         const fuse = new Fuse(labels, { includeScore: true });
         console.debug('Using fuzzy search in labels:', labels);
         const result = fuse.search(emotionResponse);
