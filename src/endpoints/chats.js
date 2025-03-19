@@ -783,12 +783,11 @@ router.post('/search', validateAvatarUrlMiddleware, function (request, response)
                 continue;
             }
 
-            // Search through messages
+            // Search through chats
             const fragments = query.trim().toLowerCase().split(/\s+/).filter(x => x);
-            const hasMatch = messages.some(message => {
-                const text = message?.mes?.toLowerCase();
-                return text && fragments.every(fragment => text.includes(fragment));
-            });
+            const text = messages.map(message => message?.mes).join('').toLowerCase();
+            const stem = chatFile.path.toLowerCase().split(/[\\\/]/).pop().replace(/.jsonl$/, '');
+            const hasMatch = fragments.every(fragment => (stem + text).includes(fragment));
 
             if (hasMatch) {
                 results.push({
