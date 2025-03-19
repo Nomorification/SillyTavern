@@ -6,13 +6,9 @@ import { SlashCommandDebugController } from './SlashCommandDebugController.js';
 import { SlashCommandScope } from './SlashCommandScope.js';
 
 /**
- * @typedef {import('./SlashCommandParser.js').ParserFlags} ParserFlags
- */
-
-/**
  * @typedef {{
  * _scope:SlashCommandScope,
- * _parserFlags:{ParserFlags},
+ * _parserFlags:import('./SlashCommandParser.js').ParserFlags,
  * _abortController:SlashCommandAbortController,
  * _debugController:SlashCommandDebugController,
  * _hasUnnamedArgument:boolean,
