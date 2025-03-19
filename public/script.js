@@ -2069,8 +2069,9 @@ export function messageFormatting(mes, ch_name, isSystem, isUser, messageId, san
     }
 
     // Prompt bias replacement should be applied on the raw message
-    if (!power_user.show_user_prompt_bias && ch_name && !isUser && !isSystem) {
-        mes = mes.replaceAll(substituteParams(power_user.user_prompt_bias), '');
+    const replacedPromptBias = power_user.user_prompt_bias && substituteParams(power_user.user_prompt_bias);
+    if (!power_user.show_user_prompt_bias && ch_name && !isUser && !isSystem && replacedPromptBias && mes.startsWith(replacedPromptBias)) {
+        mes = mes.slice(replacedPromptBias.length);
     }
 
     if (!isSystem) {
