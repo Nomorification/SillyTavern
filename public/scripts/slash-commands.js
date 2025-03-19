@@ -69,7 +69,7 @@ import { SlashCommand } from './slash-commands/SlashCommand.js';
 import { SlashCommandAbortController } from './slash-commands/SlashCommandAbortController.js';
 import { SlashCommandNamedArgumentAssignment } from './slash-commands/SlashCommandNamedArgumentAssignment.js';
 import { SlashCommandEnumValue, enumTypes } from './slash-commands/SlashCommandEnumValue.js';
-import { POPUP_TYPE, Popup, callGenericPopup } from './popup.js';
+import { POPUP_RESULT, POPUP_TYPE, Popup, callGenericPopup } from './popup.js';
 import { commonEnumProviders, enumIcons } from './slash-commands/SlashCommandCommonEnumsProvider.js';
 import { SlashCommandBreakController } from './slash-commands/SlashCommandBreakController.js';
 import { SlashCommandExecutionError } from './slash-commands/SlashCommandExecutionError.js';
@@ -2474,7 +2474,8 @@ async function buttonsCallback(args, text) {
             /** @returns {string} @param {string|number|boolean} result */
             function getResult(result) {
                 if (multiple) {
-                    return JSON.stringify(Array.from(multipleToggledState).map(r => resultToButtonMap.get(r) ?? ''));
+                    const array = result === POPUP_RESULT.AFFIRMATIVE ? Array.from(multipleToggledState).map(r => resultToButtonMap.get(r) ?? '') : [];
+                    return JSON.stringify(array);
                 }
                 return typeof result === 'number' ? resultToButtonMap.get(result) ?? '' : '';
             }
