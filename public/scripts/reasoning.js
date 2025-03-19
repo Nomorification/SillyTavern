@@ -6,7 +6,7 @@ import { getRegexedString, regex_placement } from './extensions/regex/engine.js'
 import { getCurrentLocale, t, translate } from './i18n.js';
 import { MacrosParser } from './macros.js';
 import { chat_completion_sources, getChatCompletionModel, oai_settings } from './openai.js';
-import { Popup } from './popup.js';
+import { POPUP_RESULT, Popup } from './popup.js';
 import { performFuzzySearch, power_user } from './power-user.js';
 import { getPresetManager } from './preset-manager.js';
 import { SlashCommand } from './slash-commands/SlashCommand.js';
