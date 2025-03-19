@@ -2337,10 +2337,10 @@ function processReply(str) {
     str = str.replaceAll('“', '');
     str = str.replaceAll('\n', ', ');
     str = str.normalize('NFD');
-    
+
     // Strip out non-alphanumeric characters barring model syntax exceptions
     str = str.replace(/[^a-zA-Z0-9.,:_(){}<>[\]\-'|#]+/g, ' ');
-    
+
     str = str.replace(/\s+/g, ' '); // Collapse multiple whitespaces into one
     str = str.trim();
 
@@ -3234,7 +3234,7 @@ function getNovelParams() {
         extension_settings.sd.scheduler = 'karras';
     }
 
-    if (extension_settings.sd.sampler === 'ddim' || 
+    if (extension_settings.sd.sampler === 'ddim' ||
         ['nai-diffusion-4-curated-preview', 'nai-diffusion-4-full'].includes(extension_settings.sd.model)) {
         sm = false;
         sm_dyn = false;
@@ -3772,7 +3772,6 @@ async function addSDGenButtons() {
     $('#sd_wand_container').append(buttonHtml);
     $(document.body).append(dropdownHtml);
 
-    const messageButton = $('.sd_message_gen');
     const button = $('#sd_gen');
     const dropdown = $('#sd_dropdown');
     dropdown.hide();

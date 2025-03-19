@@ -46,7 +46,6 @@ import {
     hideSwipeButtons,
     chat_metadata,
     updateChatMetadata,
-    isStreamingEnabled,
     getThumbnailUrl,
     getRequestHeaders,
     setMenuType,

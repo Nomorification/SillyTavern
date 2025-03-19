@@ -1,4 +1,0 @@
-const test={
-"FOO":"BAR"
-}
-
