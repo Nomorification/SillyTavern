@@ -32,89 +32,100 @@ const isAndroid = process.platform === 'android';
 const useShallowCharacters = !!getConfigValue('performance.lazyLoadCharacters', false, 'boolean');
 const useDiskCache = !!getConfigValue('performance.useDiskCache', true, 'boolean');
 
-const diskCache = {
+class DiskCache {
+    /** @type {string} */
+    static DIRECTORY = 'characters';
+
+    /** @type {number} */
+    static REMOVAL_INTERVAL = 60000;
+
+    /** @type {import('node-persist').LocalStorage} */
+    #instance;
+
+    /** @type {NodeJS.Timeout} */
+    #removalInterval;
+
     /**
-     * @type {import('node-persist').LocalStorage?}
-     * @private
+     * Queue for removal of cache entries.
+     * @type {Set<string>}
      */
-    _instance: null,
-    /**
-     * @type {NodeJS.Timeout?}
-     * @private
-     */
-    _removalInterval: null,
+    removalQueue = new Set();
+
     /**
      * Processes the removal queue.
      * @returns {Promise<void>}
-     * @private
      */
-    _removeCacheEntries: async function() {
+    async #removeCacheEntries() {
         try {
             if (!useDiskCache || this.removalQueue.size === 0) {
                 return;
             }
 
-            const keys = await diskCache.instance().then(i => i.keys());
+            const keys = await this.instance().then(i => i.keys());
             for (const item of this.removalQueue) {
                 const key = keys.find(k => k.startsWith(item));
                 if (key) {
-                    await diskCache.instance().then(i => i.removeItem(key));
+                    await this.instance().then(i => i.removeItem(key));
                 }
             }
             this.removalQueue.clear();
         } catch (error) {
             console.error('Error while removing cache entries:', error);
         }
-    },
+    };
+
     /**
      * Gets the disk cache instance.
      * @returns {Promise<import('node-persist').LocalStorage>}
      */
-    instance: async function() {
-        if (this._instance) {
-            return this._instance;
+    async instance() {
+        if (this.#instance) {
+            return this.#instance;
         }
 
-        const cacheDir = path.join(globalThis.DATA_ROOT, '_cache', 'characters');
-        this._instance = storage.create({ dir: cacheDir, ttl: false });
-        await this._instance.init();
-        this._removalInterval = setInterval(this._removeCacheEntries.bind(this), 60000);
-        return this._instance;
-    },
+        const cacheDir = path.join(globalThis.DATA_ROOT, '_cache', DiskCache.DIRECTORY);
+        this.#instance = storage.create({ dir: cacheDir, ttl: false });
+        await this.#instance.init();
+        this.#removalInterval = setInterval(this.#removeCacheEntries.bind(this), DiskCache.REMOVAL_INTERVAL);
+        return this.#instance;
+    }
+
     /**
-     * Queue for removal of cache entries.
-     * @type {Set<string>}
+     * Verifies disk cache size and prunes it if necessary.
+     * @param {import('../users.js').UserDirectoryList[]} directoriesList List of user directories
+     * @returns {Promise<void>}
      */
-    removalQueue: new Set(),
-};
+    async verify(directoriesList) {
+        if (!useDiskCache) {
+            return;
+        }
 
-/**
- * Verifies disk cache size and prunes it if necessary.
- * @param {import('../users.js').UserDirectoryList[]} directoriesList List of user directories
- * @returns {Promise<void>}
- */
-export async function verifyCharactersDiskCache(directoriesList) {
-    if (!useDiskCache) {
-        return;
-    }
-
-    const cache = await diskCache.instance();
-    const validKeys = [];
-    for (const dir of directoriesList) {
-        const files = fs.readdirSync(dir.characters);
-        for (const file of files) {
-            const filePath = path.join(dir.characters, file);
-            const stat = fs.statSync(filePath);
-            validKeys.push(`${filePath}-${stat.mtimeMs}`);
+        const cache = await this.instance();
+        const validKeys = [];
+        for (const dir of directoriesList) {
+            const files = fs.readdirSync(dir.characters);
+            for (const file of files) {
+                const filePath = path.join(dir.characters, file);
+                const stat = fs.statSync(filePath);
+                validKeys.push(`${filePath}-${stat.mtimeMs}`);
+            }
+        }
+        const cacheKeys = await cache.keys();
+        for (const key of cacheKeys) {
+            if (!validKeys.includes(key)) {
+                await cache.removeItem(key);
+            }
         }
     }
-    const cacheKeys = await cache.keys();
-    for (const key of cacheKeys) {
-        if (!validKeys.includes(key)) {
-            await cache.removeItem(key);
+
+    dispose() {
+        if (this.#removalInterval) {
+            clearInterval(this.#removalInterval);
         }
     }
 }
+
+export const diskCache = new DiskCache();
 
 /**
  * Reads the character card from the specified image file.

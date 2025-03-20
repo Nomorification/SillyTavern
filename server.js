@@ -66,7 +66,7 @@ import { init as statsInit, onExit as statsOnExit } from './src/endpoints/stats.
 import { checkForNewContent } from './src/endpoints/content-manager.js';
 import { init as settingsInit } from './src/endpoints/settings.js';
 import { redirectDeprecatedEndpoints, ServerStartup, setupPrivateEndpoints } from './src/server-startup.js';
-import { verifyCharactersDiskCache } from './src/endpoints/characters.js';
+import { diskCache } from './src/endpoints/characters.js';
 
 // Unrestrict console logs display limit
 util.inspect.defaultOptions.maxArrayLength = null;
@@ -269,7 +269,7 @@ async function preSetupTasks() {
     const directories = await getUserDirectoriesList();
     await checkForNewContent(directories);
     await ensureThumbnailCache();
-    await verifyCharactersDiskCache(directories);
+    await diskCache.verify(directories);
     cleanUploads();
     migrateAccessLog();
 
