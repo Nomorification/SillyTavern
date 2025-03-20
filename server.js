@@ -288,6 +288,7 @@ async function preSetupTasks() {
         if (typeof cleanupPlugins === 'function') {
             await cleanupPlugins();
         }
+        diskCache.dispose();
         setWindowTitle(consoleTitle);
         process.exit();
     };
