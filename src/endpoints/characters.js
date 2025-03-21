@@ -43,7 +43,7 @@ class DiskCache {
     static DIRECTORY = 'characters';
 
     /** @type {number} */
-    static REMOVAL_INTERVAL = 60000;
+    static REMOVAL_INTERVAL = 60 * 1000;
 
     /** @type {import('node-persist').LocalStorage} */
     #instance;
@@ -56,6 +56,22 @@ class DiskCache {
      * @type {CacheRemovalQueueItem[]}
      */
     removalQueue = [];
+
+    /**
+     * Path to the cache directory.
+     * @returns {string}
+     */
+    get cachePath() {
+        return path.join(globalThis.DATA_ROOT, '_cache', DiskCache.DIRECTORY);
+    }
+
+    /**
+     * Returns the list of hashed keys in the cache.
+     * @returns {string[]}
+     */
+    get hashedKeys() {
+        return fs.readdirSync(this.cachePath);
+    }
 
     /**
      * Processes the removal queue.
@@ -110,8 +126,7 @@ class DiskCache {
             return this.#instance;
         }
 
-        const cacheDir = path.join(globalThis.DATA_ROOT, '_cache', DiskCache.DIRECTORY);
-        this.#instance = storage.create({ dir: cacheDir, ttl: false });
+        this.#instance = storage.create({ dir: this.cachePath, ttl: false });
         await this.#instance.init();
         this.#removalInterval = setInterval(this.#removeCacheEntries.bind(this), DiskCache.REMOVAL_INTERVAL);
         return this.#instance;
@@ -128,18 +143,17 @@ class DiskCache {
         }
 
         const cache = await this.instance();
-        const validKeys = [];
+        const validKeys = new Set();
         for (const dir of directoriesList) {
-            const files = fs.readdirSync(dir.characters);
-            for (const file of files) {
-                const filePath = path.join(dir.characters, file);
+            const files = fs.readdirSync(dir.characters, { withFileTypes: true });
+            for (const file of files.filter(f => f.isFile() && path.extname(f.name) === '.png')) {
+                const filePath = path.join(dir.characters, file.name);
                 const stat = fs.statSync(filePath);
-                validKeys.push(`${filePath}-${stat.mtimeMs}`);
+                validKeys.add(path.parse(cache.getDatumPath(`${filePath}-${stat.mtimeMs}`)).base);
             }
         }
-        const cacheKeys = await cache.keys();
-        for (const key of cacheKeys) {
-            if (!validKeys.includes(key)) {
+        for (const key of this.hashedKeys) {
+            if (!validKeys.has(key)) {
                 await cache.removeItem(key);
             }
         }
