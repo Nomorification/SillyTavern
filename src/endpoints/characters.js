@@ -43,7 +43,7 @@ class DiskCache {
     static DIRECTORY = 'characters';
 
     /** @type {number} */
-    static REMOVAL_INTERVAL = 60 * 1000;
+    static REMOVAL_INTERVAL = 5 * 60 * 1000;
 
     /** @type {import('node-persist').LocalStorage} */
     #instance;
@@ -78,6 +78,9 @@ class DiskCache {
      * @returns {Promise<void>}
      */
     async #removeCacheEntries() {
+        // TODO: consider running this.verify() for a user instead as getting all cache keys
+        // is a heavy operation, since it requires to read all files in the disk cache.
+
         try {
             if (!useDiskCache || this.removalQueue.length === 0) {
                 return;
