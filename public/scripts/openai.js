@@ -2269,9 +2269,9 @@ async function sendOpenAIRequest(type, messages, signal) {
  * @param {boolean?} [options.overrideShowThoughts] Override show thoughts
  * @returns {string} The reply extracted from the response data
  */
-export function getStreamingReply(data, state, { chatCompletionSource = null, overrideShowThoughts } = {}) {
+export function getStreamingReply(data, state, { chatCompletionSource = null, overrideShowThoughts = null } = {}) {
     const chat_completion_source = chatCompletionSource ?? oai_settings.chat_completion_source;
-    const show_thoughts = overrideShowThoughts !== undefined ? overrideShowThoughts : oai_settings.show_thoughts;
+    const show_thoughts = overrideShowThoughts !== null ? overrideShowThoughts : oai_settings.show_thoughts;
 
     if (chat_completion_source === chat_completion_sources.CLAUDE) {
         if (show_thoughts) {
