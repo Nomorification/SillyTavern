@@ -5970,12 +5970,18 @@ export function cleanUpMessage(getMessage, isImpersonate, isContinue, displayInc
         nameToTrim = power_user.allow_name1_display ? '' : name1;
     }
 
-    if (nameToTrim && getMessage.indexOf(`${nameToTrim}:`) == 0) {
-        getMessage = getMessage.substring(getMessage.indexOf(`${nameToTrim}:`)+nameToTrim.length);
+    // get text from after the name (and colon) to the end of the string
+    if (nameToTrim && getMessage.indexOf(`${nameToTrim}:`) === 0) {
+        getMessage = getMessage.substring(nameToTrim.length+1);
     }
-    if (nameToTrim && getMessage.indexOf(`\n${nameToTrim}:`) >= 0) {
-        getMessage = getMessage.substring(getMessage.indexOf(`\n${nameToTrim}:`)+nameToTrim.length);
+
+    // account for case where the name is after a newline
+    let startIndex = getMessage.indexOf(`\n${nameToTrim}:`)
+    if (nameToTrim && startIndex >= 0) {
+        // get text from after the name (and colon) to the end of the string
+        getMessage = getMessage.substring(startIndex+nameToTrim.length+2);
     }
+
     if (getMessage.indexOf('<|endoftext|>') != -1) {
         getMessage = getMessage.substring(0, getMessage.indexOf('<|endoftext|>'));
     }
