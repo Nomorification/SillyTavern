@@ -3315,11 +3315,23 @@ class StreamingProcessor {
 
         if (!isImpersonate && !isContinue && Array.isArray(this.swipes) && this.swipes.length > 0) {
             for (let i = 0; i < this.swipes.length; i++) {
-                this.swipes[i] = cleanUpMessage(this.swipes[i], false, false, true, this.stoppingStrings);
+                this.swipes[i] = cleanUpMessage({
+                    getMessage: this.swipes[i],
+                    isImpersonate: false,
+                    isContinue: false,
+                    displayIncompleteSentences: true,
+                    stoppingStrings: this.stoppingStrings
+                });
             }
         }
 
-        let processedText = cleanUpMessage(text, isImpersonate, isContinue, !isFinal, this.stoppingStrings);
+        let processedText = cleanUpMessage({
+            getMessage: text,
+            isImpersonate: isImpersonate,
+            isContinue: isContinue,
+            displayIncompleteSentences: !isFinal,
+            stoppingStrings: this.stoppingStrings
+        });
 
         const charsToBalance = ['*', '"', '```'];
         for (const char of charsToBalance) {
@@ -3643,7 +3655,13 @@ export async function generateRaw(prompt, api, instructOverride, quietToLoud, sy
         }
 
         // format result, exclude user prompt bias
-        const message = cleanUpMessage(extractMessageFromData(data), false, false, true, null, false);
+        const message = cleanUpMessage({
+            getMessage: extractMessageFromData(data),
+            isImpersonate: false,
+            isContinue: false,
+            displayIncompleteSentences: true,
+            includeUserPromptBias: false
+        });
 
         if (!message) {
             throw new Error('No message generated');
@@ -4844,7 +4862,12 @@ export async function Generate(type, { automatic_trigger, force_name2, quiet_pro
 
             hideSwipeButtons();
             let getMessage = await streamingProcessor.generate();
-            let messageChunk = cleanUpMessage(getMessage, isImpersonate, isContinue, false);
+            let messageChunk = cleanUpMessage({
+                getMessage: getMessage,
+                isImpersonate: isImpersonate,
+                isContinue: isContinue,
+                displayIncompleteSentences: false
+            });
 
             if (isContinue) {
                 getMessage = continue_mag + getMessage;
@@ -4928,7 +4951,14 @@ export async function Generate(type, { automatic_trigger, force_name2, quiet_pro
 
         const swipes = extractMultiSwipes(data, type);
 
-        messageChunk = cleanUpMessage(getMessage, isImpersonate, isContinue, false);
+        messageChunk = cleanUpMessage({
+            getMessage: getMessage,
+            isImpersonate: isImpersonate,
+            isContinue: isContinue,
+            displayIncompleteSentences: false
+        });
+
+
         reasoning = getRegexedString(reasoning, regex_placement.REASONING);
 
         if (power_user.trim_spaces) {
@@ -4942,7 +4972,12 @@ export async function Generate(type, { automatic_trigger, force_name2, quiet_pro
 
         //Formating
         const displayIncomplete = type === 'quiet' && !quietToLoud;
-        getMessage = cleanUpMessage(getMessage, isImpersonate, isContinue, displayIncomplete);
+        getMessage = cleanUpMessage({
+            getMessage: getMessage,
+            isImpersonate: isImpersonate,
+            isContinue: isContinue,
+            displayIncompleteSentences: displayIncomplete
+        });
 
         if (isImpersonate) {
             $('#send_textarea').val(getMessage)[0].dispatchEvent(new Event('input', { bubbles: true }));
@@ -5908,7 +5943,13 @@ function extractMultiSwipes(data, type) {
 
         for (let i = 1; i < data.choices.length; i++) {
             const text = data?.choices[i]?.message?.content ?? data?.choices[i]?.text ?? '';
-            const cleanedText = cleanUpMessage(text, false, false, false);
+            const cleanedText = cleanUpMessage({
+                getMessage: text,
+                isImpersonate: false,
+                isContinue: false,
+                displayIncompleteSentences: false
+            });
+
             swipes.push(cleanedText);
         }
     }
@@ -5916,7 +5957,25 @@ function extractMultiSwipes(data, type) {
     return swipes;
 }
 
-export function cleanUpMessage(getMessage, isImpersonate, isContinue, displayIncompleteSentences = false, stoppingStrings = null, includeUserPromptBias = true) {
+/**
+ * Formats a message according to user settings
+ * @param {object} [options] - Additional options.
+ * @param {string} [options.getMessage] The message to clean up
+ * @param {boolean} [options.isImpersonate] Whether this is an impersonated message
+ * @param {boolean} [options.isContinue] Whether this is a continued message
+ * @param {boolean} [options.displayIncompleteSentences] Whether to *not* trim incomplete sentences.
+ * @param {array} [options.stoppingStrings] Array of stopping strings.
+ * @param {boolean} [options.includeUserPromptBias] Whether to permit prepending the user prompt bias at the beginning.
+@param {boolean} [options.trimNames] Whether to allow trimming "{{char}}:" or "{{user}}:" from the beginning.
+ *
+ * @returns {string} The formatted message
+ */
+export function cleanUpMessage({ getMessage, isImpersonate, isContinue, displayIncompleteSentences = false, stoppingStrings = null, includeUserPromptBias = true, trimNames = true} = {}) {
+    if (arguments.length > 0 && typeof arguments[0] !== 'object') {
+        console.trace('cleanUpMessage called with positional arguments. Please use an object instead.');
+        [getMessage, isImpersonate, isContinue, displayIncompleteSentences, stoppingStrings, includeUserPromptBias] = arguments;
+    }
+
     if (!getMessage) {
         return '';
     }
@@ -5961,25 +6020,26 @@ export function cleanUpMessage(getMessage, isImpersonate, isContinue, displayInc
     // "trailing whitespace on newlines\nevery line of the string\nsample text"
     getMessage = getMessage.replace(/[^\S\r\n]+$/gm, '');
 
-    let nameToTrim = isImpersonate ? name2 : name1;
+    // Trim instances of "{{name}}:" from the start of the message+
+    if (trimNames) {
+        let nameToTrim = isImpersonate ? name2 : name1;
+        if (isImpersonate) {
+            nameToTrim = power_user.allow_name2_display ? '' : name2;
+        } else {
+            nameToTrim = power_user.allow_name1_display ? '' : name1;
+        }
 
-    if (isImpersonate) {
-        nameToTrim = power_user.allow_name2_display ? '' : name2;
-    }
-    else {
-        nameToTrim = power_user.allow_name1_display ? '' : name1;
-    }
-
-    // get text from after the name (and colon) to the end of the string
-    if (nameToTrim && getMessage.indexOf(`${nameToTrim}:`) === 0) {
-        getMessage = getMessage.substring(nameToTrim.length+1);
-    }
-
-    // account for case where the name is after a newline
-    let startIndex = getMessage.indexOf(`\n${nameToTrim}:`)
-    if (nameToTrim && startIndex >= 0) {
         // get text from after the name (and colon) to the end of the string
-        getMessage = getMessage.substring(startIndex+nameToTrim.length+2);
+        if (nameToTrim && getMessage.indexOf(`${nameToTrim}:`) === 0) {
+            getMessage = getMessage.substring(nameToTrim.length + 1);
+        }
+
+        // account for case where the name is after a newline
+        let startIndex = getMessage.indexOf(`\n${nameToTrim}:`)
+        if (nameToTrim && startIndex >= 0) {
+            getMessage = getMessage.substring(startIndex + nameToTrim.length + 2);
+        }
+        getMessage.trimStart();
     }
 
     if (getMessage.indexOf('<|endoftext|>') != -1) {
@@ -6041,13 +6101,15 @@ export function cleanUpMessage(getMessage, isImpersonate, isContinue, displayInc
         getMessage = fixMarkdown(getMessage, false);
     }
 
-    const nameToTrim2 = isImpersonate
-        ? (!power_user.allow_name1_display ? name1 : '')
-        : (!power_user.allow_name2_display ? name2 : '');
+    if (trimNames) {
+        const nameToTrim2 = isImpersonate
+            ? (!power_user.allow_name1_display ? name1 : '')
+            : (!power_user.allow_name2_display ? name2 : '');
 
-    if (nameToTrim2 && getMessage.startsWith(nameToTrim2 + ':')) {
-        getMessage = getMessage.replace(nameToTrim2 + ':', '');
-        getMessage = getMessage.trimStart();
+        if (nameToTrim2 && getMessage.startsWith(nameToTrim2 + ':')) {
+            getMessage = getMessage.replace(nameToTrim2 + ':', '');
+            getMessage = getMessage.trimStart();
+        }
     }
 
     if (isImpersonate) {
