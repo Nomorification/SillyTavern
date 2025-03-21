@@ -149,7 +149,7 @@ export class TextCompletionService {
 
         if (!response.ok) {
             const text = await response.text();
-            tryParseStreamingError(response, text, true);
+            tryParseStreamingError(response, text, { quiet: true });
 
             throw new Error(`Got response status ${response.status}`);
         }
@@ -166,7 +166,7 @@ export class TextCompletionService {
                 if (done) return;
                 if (value.data === '[DONE]') return;
 
-                tryParseStreamingError(response, value.data, true);
+                tryParseStreamingError(response, value.data, { quiet: true });
 
                 let data = JSON.parse(value.data);
 
@@ -389,7 +389,7 @@ export class ChatCompletionService {
 
         if (!response.ok) {
             const text = await response.text();
-            tryParseStreamingError(response, text, true);
+            tryParseStreamingError(response, text, { quiet: true });
 
             throw new Error(`Got response status ${response.status}`);
         }
@@ -406,7 +406,7 @@ export class ChatCompletionService {
                 if (done) return;
                 const rawData = value.data;
                 if (rawData === '[DONE]') return;
-                tryParseStreamingError(response, rawData, true);
+                tryParseStreamingError(response, rawData, { quiet: true });
                 const parsed = JSON.parse(rawData);
 
                 const reply = getStreamingReply(parsed, state, {

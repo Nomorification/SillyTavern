@@ -1444,9 +1444,10 @@ export async function prepareOpenAIMessages({
  * Handles errors during streaming requests.
  * @param {Response} response
  * @param {string} decoded - response text or decoded stream data
- * @param {boolean?} [quiet=false]
+ * @param {object} [options]
+ * @param {boolean?} [options.quiet=false] Suppress toast messages
  */
-export function tryParseStreamingError(response, decoded, quiet = false) {
+export function tryParseStreamingError(response, decoded, { quiet = false } = {}) {
     try {
         const data = JSON.parse(decoded);
 
@@ -1454,8 +1455,8 @@ export function tryParseStreamingError(response, decoded, quiet = false) {
             return;
         }
 
-        checkQuotaError(data, quiet);
-        checkModerationError(data, quiet);
+        checkQuotaError(data, { quiet });
+        checkModerationError(data, { quiet });
 
         // these do not throw correctly (equiv to Error("[object Object]"))
         // if trying to fix "[object Object]" displayed to users, start here
@@ -1478,11 +1479,12 @@ export function tryParseStreamingError(response, decoded, quiet = false) {
 /**
  * Checks if the response contains a quota error and displays a popup if it does.
  * @param data
- * @param {boolean?} [quiet=false]
+ * @param {object} [options]
+ * @param {boolean?} [options.quiet=false] Suppress toast messages
  * @returns {void}
  * @throws {object} - response JSON
  */
-function checkQuotaError(data, quiet = false) {
+function checkQuotaError(data, { quiet = false } = {}) {
     if (!data) {
         return;
     }
@@ -1498,9 +1500,10 @@ function checkQuotaError(data, quiet = false) {
 
 /**
  * @param {any} data
- * @param {boolean?} [quiet=false]
+ * @param {object} [options]
+ * @param {boolean?} [options.quiet=false] Suppress toast messages
  */
-function checkModerationError(data, quiet = false) {
+function checkModerationError(data, { quiet = false } = {}) {
     const moderationError = data?.error?.message?.includes('requires moderation');
     if (moderationError && !quiet) {
         const moderationReason = `Reasons: ${data?.error?.metadata?.reasons?.join(', ') ?? '(N/A)'}`;
