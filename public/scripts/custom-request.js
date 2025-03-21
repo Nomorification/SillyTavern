@@ -64,7 +64,6 @@ import EventSourceStream from './sse-stream.js';
  * @property {Object} state - Generated state
  * @property {string?} [state.reasoning] - Generated reasoning
  * @property {string?} [state.image] - Generated image
- * @returns {StreamResponse}
  */
 
 // #endregion
@@ -412,7 +411,7 @@ export class ChatCompletionService {
 
                 const reply = getStreamingReply(parsed, state, {
                     chatCompletionSource: data.chat_completion_source,
-                    ignoreShowThoughts: true,
+                    overrideShowThoughts: true,
                 });
                 if (Array.isArray(parsed?.choices) && parsed?.choices?.[0]?.index > 0) {
                     const swipeIndex = parsed.choices[0].index - 1;

@@ -1444,9 +1444,9 @@ export async function prepareOpenAIMessages({
  * Handles errors during streaming requests.
  * @param {Response} response
  * @param {string} decoded - response text or decoded stream data
- * @param {boolean?} [supressToastr=false]
+ * @param {boolean?} [quiet=false]
  */
-export function tryParseStreamingError(response, decoded, supressToastr = false) {
+export function tryParseStreamingError(response, decoded, quiet = false) {
     try {
         const data = JSON.parse(decoded);
 
@@ -1454,19 +1454,19 @@ export function tryParseStreamingError(response, decoded, supressToastr = false)
             return;
         }
 
-        checkQuotaError(data, supressToastr);
-        checkModerationError(data, supressToastr);
+        checkQuotaError(data, quiet);
+        checkModerationError(data, quiet);
 
         // these do not throw correctly (equiv to Error("[object Object]"))
         // if trying to fix "[object Object]" displayed to users, start here
 
         if (data.error) {
-            !supressToastr && toastr.error(data.error.message || response.statusText, 'Chat Completion API');
+            !quiet && toastr.error(data.error.message || response.statusText, 'Chat Completion API');
             throw new Error(data);
         }
 
         if (data.message) {
-            !supressToastr && toastr.error(data.message, 'Chat Completion API');
+            !quiet && toastr.error(data.message, 'Chat Completion API');
             throw new Error(data);
         }
     }
@@ -1478,17 +1478,17 @@ export function tryParseStreamingError(response, decoded, supressToastr = false)
 /**
  * Checks if the response contains a quota error and displays a popup if it does.
  * @param data
- * @param {boolean?} [supressToastr=false]
+ * @param {boolean?} [quiet=false]
  * @returns {void}
  * @throws {object} - response JSON
  */
-function checkQuotaError(data, supressToastr = false) {
+function checkQuotaError(data, quiet = false) {
     if (!data) {
         return;
     }
 
     if (data.quota_error) {
-        !supressToastr && renderTemplateAsync('quotaError').then((html) => Popup.show.text('Quota Error', html));
+        !quiet && renderTemplateAsync('quotaError').then((html) => Popup.show.text('Quota Error', html));
 
         // this does not throw correctly (equiv to Error("[object Object]"))
         // if trying to fix "[object Object]" displayed to users, start here
@@ -1498,11 +1498,11 @@ function checkQuotaError(data, supressToastr = false) {
 
 /**
  * @param {any} data
- * @param {boolean?} [supressToastr=false]
+ * @param {boolean?} [quiet=false]
  */
-function checkModerationError(data, supressToastr = false) {
+function checkModerationError(data, quiet = false) {
     const moderationError = data?.error?.message?.includes('requires moderation');
-    if (moderationError && !supressToastr) {
+    if (moderationError && !quiet) {
         const moderationReason = `Reasons: ${data?.error?.metadata?.reasons?.join(', ') ?? '(N/A)'}`;
         const flaggedText = data?.error?.metadata?.flagged_input ?? '(N/A)';
         toastr.info(flaggedText, moderationReason, { timeOut: 10000 });
@@ -2261,14 +2261,14 @@ async function sendOpenAIRequest(type, messages, signal) {
  * Extracts the reply from the response data from a chat completions-like source
  * @param {object} data Response data from the chat completions-like source
  * @param {object} state Additional state to keep track of
- * @param {object} options Additional options
+ * @param {object} [options] Additional options
  * @param {string?} [options.chatCompletionSource] Chat completion source
- * @param {boolean?} [options.ignoreShowThoughts] Ignore show thoughts
+ * @param {boolean?} [options.overrideShowThoughts] Override show thoughts
  * @returns {string} The reply extracted from the response data
  */
-export function getStreamingReply(data, state, { chatCompletionSource = null, ignoreShowThoughts = false } = {}) {
+export function getStreamingReply(data, state, { chatCompletionSource = null, overrideShowThoughts } = {}) {
     const chat_completion_source = chatCompletionSource ?? oai_settings.chat_completion_source;
-    const show_thoughts = ignoreShowThoughts ? true : oai_settings.show_thoughts;
+    const show_thoughts = overrideShowThoughts !== undefined ? overrideShowThoughts : oai_settings.show_thoughts;
 
     if (chat_completion_source === chat_completion_sources.CLAUDE) {
         if (show_thoughts) {
