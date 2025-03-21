@@ -1444,8 +1444,9 @@ export async function prepareOpenAIMessages({
  * Handles errors during streaming requests.
  * @param {Response} response
  * @param {string} decoded - response text or decoded stream data
+ * @param {boolean?} [supressToastr=false]
  */
-function tryParseStreamingError(response, decoded) {
+export function tryParseStreamingError(response, decoded, supressToastr = false) {
     try {
         const data = JSON.parse(decoded);
 
@@ -1453,19 +1454,19 @@ function tryParseStreamingError(response, decoded) {
             return;
         }
 
-        checkQuotaError(data);
-        checkModerationError(data);
+        checkQuotaError(data, supressToastr);
+        checkModerationError(data, supressToastr);
 
         // these do not throw correctly (equiv to Error("[object Object]"))
         // if trying to fix "[object Object]" displayed to users, start here
 
         if (data.error) {
-            toastr.error(data.error.message || response.statusText, 'Chat Completion API');
+            !supressToastr && toastr.error(data.error.message || response.statusText, 'Chat Completion API');
             throw new Error(data);
         }
 
         if (data.message) {
-            toastr.error(data.message, 'Chat Completion API');
+            !supressToastr && toastr.error(data.message, 'Chat Completion API');
             throw new Error(data);
         }
     }
@@ -1477,16 +1478,17 @@ function tryParseStreamingError(response, decoded) {
 /**
  * Checks if the response contains a quota error and displays a popup if it does.
  * @param data
+ * @param {boolean?} [supressToastr=false]
  * @returns {void}
  * @throws {object} - response JSON
  */
-function checkQuotaError(data) {
+function checkQuotaError(data, supressToastr = false) {
     if (!data) {
         return;
     }
 
     if (data.quota_error) {
-        renderTemplateAsync('quotaError').then((html) => Popup.show.text('Quota Error', html));
+        !supressToastr && renderTemplateAsync('quotaError').then((html) => Popup.show.text('Quota Error', html));
 
         // this does not throw correctly (equiv to Error("[object Object]"))
         // if trying to fix "[object Object]" displayed to users, start here
@@ -1494,9 +1496,13 @@ function checkQuotaError(data) {
     }
 }
 
-function checkModerationError(data) {
+/**
+ * @param {any} data
+ * @param {boolean?} [supressToastr=false]
+ */
+function checkModerationError(data, supressToastr = false) {
     const moderationError = data?.error?.message?.includes('requires moderation');
-    if (moderationError) {
+    if (moderationError && !supressToastr) {
         const moderationReason = `Reasons: ${data?.error?.metadata?.reasons?.join(', ') ?? '(N/A)'}`;
         const flaggedText = data?.error?.metadata?.flagged_input ?? '(N/A)';
         toastr.info(flaggedText, moderationReason, { timeOut: 10000 });
@@ -2255,37 +2261,43 @@ async function sendOpenAIRequest(type, messages, signal) {
  * Extracts the reply from the response data from a chat completions-like source
  * @param {object} data Response data from the chat completions-like source
  * @param {object} state Additional state to keep track of
+ * @param {object} options Additional options
+ * @param {string?} [options.chatCompletionSource] Chat completion source
+ * @param {boolean?} [options.ignoreShowThoughts] Ignore show thoughts
  * @returns {string} The reply extracted from the response data
  */
-function getStreamingReply(data, state) {
-    if (oai_settings.chat_completion_source === chat_completion_sources.CLAUDE) {
-        if (oai_settings.show_thoughts) {
+export function getStreamingReply(data, state, { chatCompletionSource = null, ignoreShowThoughts = false } = {}) {
+    const chat_completion_source = chatCompletionSource ?? oai_settings.chat_completion_source;
+    const show_thoughts = ignoreShowThoughts ? true : oai_settings.show_thoughts;
+
+    if (chat_completion_source === chat_completion_sources.CLAUDE) {
+        if (show_thoughts) {
             state.reasoning += data?.delta?.thinking || '';
         }
         return data?.delta?.text || '';
-    } else if (oai_settings.chat_completion_source === chat_completion_sources.MAKERSUITE) {
+    } else if (chat_completion_source === chat_completion_sources.MAKERSUITE) {
         const inlineData = data?.candidates?.[0]?.content?.parts?.find(x => x.inlineData)?.inlineData;
         if (inlineData) {
             state.image = `data:${inlineData.mimeType};base64,${inlineData.data}`;
         }
-        if (oai_settings.show_thoughts) {
+        if (show_thoughts) {
             state.reasoning += (data?.candidates?.[0]?.content?.parts?.filter(x => x.thought)?.map(x => x.text)?.[0] || '');
         }
         return data?.candidates?.[0]?.content?.parts?.filter(x => !x.thought)?.map(x => x.text)?.[0] || '';
-    } else if (oai_settings.chat_completion_source === chat_completion_sources.COHERE) {
+    } else if (chat_completion_source === chat_completion_sources.COHERE) {
         return data?.delta?.message?.content?.text || data?.delta?.message?.tool_plan || '';
-    } else if (oai_settings.chat_completion_source === chat_completion_sources.DEEPSEEK) {
-        if (oai_settings.show_thoughts) {
+    } else if (chat_completion_source === chat_completion_sources.DEEPSEEK) {
+        if (show_thoughts) {
             state.reasoning += (data.choices?.filter(x => x?.delta?.reasoning_content)?.[0]?.delta?.reasoning_content || '');
         }
         return data.choices?.[0]?.delta?.content || '';
-    } else if (oai_settings.chat_completion_source === chat_completion_sources.OPENROUTER) {
-        if (oai_settings.show_thoughts) {
+    } else if (chat_completion_source === chat_completion_sources.OPENROUTER) {
+        if (show_thoughts) {
             state.reasoning += (data.choices?.filter(x => x?.delta?.reasoning)?.[0]?.delta?.reasoning || '');
         }
         return data.choices?.[0]?.delta?.content ?? data.choices?.[0]?.message?.content ?? data.choices?.[0]?.text ?? '';
-    } else if (oai_settings.chat_completion_source === chat_completion_sources.CUSTOM) {
-        if (oai_settings.show_thoughts) {
+    } else if (chat_completion_source === chat_completion_sources.CUSTOM) {
+        if (show_thoughts) {
             state.reasoning +=
                 data.choices?.filter(x => x?.delta?.reasoning_content)?.[0]?.delta?.reasoning_content ??
                 data.choices?.filter(x => x?.delta?.reasoning)?.[0]?.delta?.reasoning ??
