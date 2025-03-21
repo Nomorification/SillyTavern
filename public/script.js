@@ -5963,10 +5963,10 @@ function extractMultiSwipes(data, type) {
  * @param {string} [options.getMessage] The message to clean up
  * @param {boolean} [options.isImpersonate] Whether this is an impersonated message
  * @param {boolean} [options.isContinue] Whether this is a continued message
- * @param {boolean} [options.displayIncompleteSentences] Whether to *not* trim incomplete sentences.
+ * @param {boolean} [options.displayIncompleteSentences] Whether to keep incomplete sentences at the end.
  * @param {array} [options.stoppingStrings] Array of stopping strings.
  * @param {boolean} [options.includeUserPromptBias] Whether to permit prepending the user prompt bias at the beginning.
-@param {boolean} [options.trimNames] Whether to allow trimming "{{char}}:" or "{{user}}:" from the beginning.
+ * @param {boolean} [options.trimNames] Whether to allow trimming "{{char}}:" or "{{user}}:" from the beginning.
  *
  * @returns {string} The formatted message
  */
