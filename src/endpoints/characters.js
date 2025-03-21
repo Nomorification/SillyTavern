@@ -33,6 +33,12 @@ const useShallowCharacters = !!getConfigValue('performance.lazyLoadCharacters', 
 const useDiskCache = !!getConfigValue('performance.useDiskCache', true, 'boolean');
 
 class DiskCache {
+    /**
+     * @typedef {object} CacheRemovalQueueItem
+     * @property {string} item Path to the character file
+     * @property {number} timestamp Timestamp of the last access
+     */
+
     /** @type {string} */
     static DIRECTORY = 'characters';
 
@@ -47,9 +53,9 @@ class DiskCache {
 
     /**
      * Queue for removal of cache entries.
-     * @type {Set<string>}
+     * @type {CacheRemovalQueueItem[]}
      */
-    removalQueue = new Set();
+    removalQueue = [];
 
     /**
      * Processes the removal queue.
@@ -57,22 +63,43 @@ class DiskCache {
      */
     async #removeCacheEntries() {
         try {
-            if (!useDiskCache || this.removalQueue.size === 0) {
+            if (!useDiskCache || this.removalQueue.length === 0) {
                 return;
             }
 
-            const keys = await this.instance().then(i => i.keys());
-            for (const item of this.removalQueue) {
-                const key = keys.find(k => k.startsWith(item));
-                if (key) {
-                    await this.instance().then(i => i.removeItem(key));
+            /** @type {Map<string, number>} */
+            const latestTimestamps = new Map();
+            for (const { item, timestamp } of this.removalQueue) {
+                if (!latestTimestamps.has(item) || timestamp > (latestTimestamps.get(item) ?? 0)) {
+                    latestTimestamps.set(item, timestamp);
                 }
             }
-            this.removalQueue.clear();
+            this.removalQueue.length = 0;
+
+            const cache = await this.instance();
+            const keys = await cache.keys();
+
+            for (const [item, timestamp] of latestTimestamps.entries()) {
+                const itemKeys = keys.filter(k => k.startsWith(item));
+                if (!itemKeys.length) {
+                    continue;
+                }
+                for (const key of itemKeys) {
+                    const datumPath = cache.getDatumPath(key);
+                    if (!fs.existsSync(datumPath)) {
+                        continue;
+                    }
+                    const stat = fs.statSync(datumPath);
+                    if (stat.mtimeMs > timestamp) {
+                        continue;
+                    }
+                    await cache.removeItem(key);
+                }
+            }
         } catch (error) {
             console.error('Error while removing cache entries:', error);
         }
-    };
+    }
 
     /**
      * Gets the disk cache instance.
@@ -176,7 +203,7 @@ async function writeCharacterData(inputFile, data, outputFile, request, crop = u
             }
         }
         if (useDiskCache && !Buffer.isBuffer(inputFile)) {
-            diskCache.removalQueue.add(inputFile);
+            diskCache.removalQueue.push({ item: inputFile, timestamp: Date.now() });
         }
         /**
          * Read the image, resize, and save it as a PNG into the buffer.
