@@ -3320,7 +3320,7 @@ class StreamingProcessor {
                     isImpersonate: false,
                     isContinue: false,
                     displayIncompleteSentences: true,
-                    stoppingStrings: this.stoppingStrings
+                    stoppingStrings: this.stoppingStrings,
                 });
             }
         }
@@ -3330,7 +3330,7 @@ class StreamingProcessor {
             isImpersonate: isImpersonate,
             isContinue: isContinue,
             displayIncompleteSentences: !isFinal,
-            stoppingStrings: this.stoppingStrings
+            stoppingStrings: this.stoppingStrings,
         });
 
         const charsToBalance = ['*', '"', '```'];
@@ -3660,7 +3660,7 @@ export async function generateRaw(prompt, api, instructOverride, quietToLoud, sy
             isImpersonate: false,
             isContinue: false,
             displayIncompleteSentences: true,
-            includeUserPromptBias: false
+            includeUserPromptBias: false,
         });
 
         if (!message) {
@@ -4866,7 +4866,7 @@ export async function Generate(type, { automatic_trigger, force_name2, quiet_pro
                 getMessage: getMessage,
                 isImpersonate: isImpersonate,
                 isContinue: isContinue,
-                displayIncompleteSentences: false
+                displayIncompleteSentences: false,
             });
 
             if (isContinue) {
@@ -4955,7 +4955,7 @@ export async function Generate(type, { automatic_trigger, force_name2, quiet_pro
             getMessage: getMessage,
             isImpersonate: isImpersonate,
             isContinue: isContinue,
-            displayIncompleteSentences: false
+            displayIncompleteSentences: false,
         });
 
 
@@ -4976,7 +4976,7 @@ export async function Generate(type, { automatic_trigger, force_name2, quiet_pro
             getMessage: getMessage,
             isImpersonate: isImpersonate,
             isContinue: isContinue,
-            displayIncompleteSentences: displayIncomplete
+            displayIncompleteSentences: displayIncomplete,
         });
 
         if (isImpersonate) {
@@ -5947,7 +5947,7 @@ function extractMultiSwipes(data, type) {
                 getMessage: text,
                 isImpersonate: false,
                 isContinue: false,
-                displayIncompleteSentences: false
+                displayIncompleteSentences: false,
             });
 
             swipes.push(cleanedText);
@@ -5970,7 +5970,7 @@ function extractMultiSwipes(data, type) {
  *
  * @returns {string} The formatted message
  */
-export function cleanUpMessage({ getMessage, isImpersonate, isContinue, displayIncompleteSentences = false, stoppingStrings = null, includeUserPromptBias = true, trimNames = true} = {}) {
+export function cleanUpMessage({ getMessage, isImpersonate, isContinue, displayIncompleteSentences = false, stoppingStrings = null, includeUserPromptBias = true, trimNames = true } = {}) {
     if (arguments.length > 0 && typeof arguments[0] !== 'object') {
         console.trace('cleanUpMessage called with positional arguments. Please use an object instead.');
         [getMessage, isImpersonate, isContinue, displayIncompleteSentences, stoppingStrings, includeUserPromptBias] = arguments;
@@ -6035,7 +6035,7 @@ export function cleanUpMessage({ getMessage, isImpersonate, isContinue, displayI
         }
 
         // account for case where the name is after a newline
-        let startIndex = getMessage.indexOf(`\n${nameToTrim}:`)
+        let startIndex = getMessage.indexOf(`\n${nameToTrim}:`);
         if (nameToTrim && startIndex >= 0) {
             getMessage = getMessage.substring(startIndex + nameToTrim.length + 2);
         }

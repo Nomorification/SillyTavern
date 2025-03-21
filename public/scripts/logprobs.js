@@ -372,7 +372,7 @@ function createSwipe(messageId, prompt) {
         getMessage: prompt,
         isImpersonate: false,
         isContinue: false,
-        displayIncompleteSentences: true
+        displayIncompleteSentences: true,
     });
 
     const msg = chat[messageId];
