@@ -5971,10 +5971,10 @@ export function cleanUpMessage(getMessage, isImpersonate, isContinue, displayInc
     }
 
     if (nameToTrim && getMessage.indexOf(`${nameToTrim}:`) == 0) {
-        getMessage = getMessage.substring(0, getMessage.indexOf(`${nameToTrim}:`));
+        getMessage = getMessage.substring(getMessage.indexOf(`${nameToTrim}:`)+nameToTrim.length);
     }
     if (nameToTrim && getMessage.indexOf(`\n${nameToTrim}:`) >= 0) {
-        getMessage = getMessage.substring(0, getMessage.indexOf(`\n${nameToTrim}:`));
+        getMessage = getMessage.substring(getMessage.indexOf(`\n${nameToTrim}:`)+nameToTrim.length);
     }
     if (getMessage.indexOf('<|endoftext|>') != -1) {
         getMessage = getMessage.substring(0, getMessage.indexOf('<|endoftext|>'));
