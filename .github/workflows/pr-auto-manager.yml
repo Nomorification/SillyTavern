@@ -1,6 +1,7 @@
 name: 🔀 Pull Request Manager
 
 on:
+  workflow_dispatch: # Allow to manually call this workflow
   pull_request_target:
     types: [opened, synchronize, reopened, edited, labeled, unlabeled, closed]
   pull_request_review_comment:
@@ -16,6 +17,12 @@ jobs:
     runs-on: ubuntu-latest
     # Only needs to run when code is changed
     if: github.event.action == 'opened' || github.event.action == 'synchronize'
+
+    # Override permissions, linter likely needs write access to issues
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
 
     steps:
       - name: Checkout Repository
