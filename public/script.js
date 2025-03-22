@@ -6036,7 +6036,7 @@ export function cleanUpMessage({ getMessage, isImpersonate, isContinue, displayI
 
         if (wrongName) {
             // If the message starts with the wrong name, delete the entire response
-            let startIndex = getMessage.indexOf(`${wrongName}`);
+            let startIndex = getMessage.indexOf(`${wrongName}:`);
             if (startIndex === 0) {
                 getMessage = '';
                 console.debug(`Message started with the wrong name: "${wrongName}" - response was deleted.`);
