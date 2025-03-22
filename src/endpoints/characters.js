@@ -21,6 +21,7 @@ import { parse, write } from '../character-card-parser.js';
 import { readWorldInfoFile } from './worldinfo.js';
 import { invalidateThumbnail } from './thumbnails.js';
 import { importRisuSprites } from './sprites.js';
+import { getUserDirectories } from '../users.js';
 const defaultAvatarPath = './public/img/ai4.png';
 
 // With 100 MB limit it would take roughly 3000 characters to reach this limit
@@ -34,28 +35,29 @@ const useDiskCache = !!getConfigValue('performance.useDiskCache', true, 'boolean
 
 class DiskCache {
     /**
-     * @typedef {object} CacheRemovalQueueItem
-     * @property {string} item Path to the character file
-     * @property {number} timestamp Timestamp of the last access
+     * @type {string}
+     * @readonly
      */
-
-    /** @type {string} */
     static DIRECTORY = 'characters';
 
-    /** @type {number} */
-    static REMOVAL_INTERVAL = 5 * 60 * 1000;
+    /**
+     * @type {number}
+     * @readonly
+     */
+    static SYNC_INTERVAL = 5 * 60 * 1000;
 
     /** @type {import('node-persist').LocalStorage} */
     #instance;
 
     /** @type {NodeJS.Timeout} */
-    #removalInterval;
+    #syncInterval;
 
     /**
-     * Queue for removal of cache entries.
-     * @type {CacheRemovalQueueItem[]}
+     * Queue of user handles to sync.
+     * @type {Set<string>}
+     * @readonly
      */
-    removalQueue = [];
+    syncQueue = new Set();
 
     /**
      * Path to the cache directory.
@@ -74,49 +76,21 @@ class DiskCache {
     }
 
     /**
-     * Processes the removal queue.
+     * Processes the synchronization queue.
      * @returns {Promise<void>}
      */
-    async #removeCacheEntries() {
-        // TODO: consider running this.verify() for a user instead as getting all cache keys
-        // is a heavy operation, since it requires to read all files in the disk cache.
-
+    async #syncCacheEntries() {
         try {
-            if (!useDiskCache || this.removalQueue.length === 0) {
+            if (!useDiskCache || this.syncQueue.size === 0) {
                 return;
             }
 
-            /** @type {Map<string, number>} */
-            const latestTimestamps = new Map();
-            for (const { item, timestamp } of this.removalQueue) {
-                if (!latestTimestamps.has(item) || timestamp > (latestTimestamps.get(item) ?? 0)) {
-                    latestTimestamps.set(item, timestamp);
-                }
-            }
-            this.removalQueue.length = 0;
+            const directories = [...this.syncQueue].map(entry => getUserDirectories(entry));
+            this.syncQueue.clear();
 
-            const cache = await this.instance();
-            const keys = await cache.keys();
-
-            for (const [item, timestamp] of latestTimestamps.entries()) {
-                const itemKeys = keys.filter(k => k.startsWith(item));
-                if (!itemKeys.length) {
-                    continue;
-                }
-                for (const key of itemKeys) {
-                    const datumPath = cache.getDatumPath(key);
-                    if (!fs.existsSync(datumPath)) {
-                        continue;
-                    }
-                    const stat = fs.statSync(datumPath);
-                    if (stat.mtimeMs > timestamp) {
-                        continue;
-                    }
-                    await cache.removeItem(key);
-                }
-            }
+            await this.verify(directories);
         } catch (error) {
-            console.error('Error while removing cache entries:', error);
+            console.error('Error while synchronizing cache entries:', error);
         }
     }
 
@@ -131,7 +105,7 @@ class DiskCache {
 
         this.#instance = storage.create({ dir: this.cachePath, ttl: false });
         await this.#instance.init();
-        this.#removalInterval = setInterval(this.#removeCacheEntries.bind(this), DiskCache.REMOVAL_INTERVAL);
+        this.#syncInterval = setInterval(this.#syncCacheEntries.bind(this), DiskCache.SYNC_INTERVAL);
         return this.#instance;
     }
 
@@ -151,8 +125,8 @@ class DiskCache {
             const files = fs.readdirSync(dir.characters, { withFileTypes: true });
             for (const file of files.filter(f => f.isFile() && path.extname(f.name) === '.png')) {
                 const filePath = path.join(dir.characters, file.name);
-                const stat = fs.statSync(filePath);
-                validKeys.add(path.parse(cache.getDatumPath(`${filePath}-${stat.mtimeMs}`)).base);
+                const cacheKey = getCacheKey(filePath);
+                validKeys.add(path.parse(cache.getDatumPath(cacheKey)).base);
             }
         }
         for (const key of this.hashedKeys) {
@@ -163,13 +137,27 @@ class DiskCache {
     }
 
     dispose() {
-        if (this.#removalInterval) {
-            clearInterval(this.#removalInterval);
+        if (this.#syncInterval) {
+            clearInterval(this.#syncInterval);
         }
     }
 }
 
 export const diskCache = new DiskCache();
+
+/**
+ * Gets the cache key for the specified image file.
+ * @param {string} inputFile - Path to the image file
+ * @returns {string} - Cache key
+ */
+function getCacheKey(inputFile) {
+    if (fs.existsSync(inputFile)) {
+        const stat = fs.statSync(inputFile);
+        return `${inputFile}-${stat.mtimeMs}`;
+    }
+
+    return inputFile;
+}
 
 /**
  * Reads the character card from the specified image file.
@@ -178,8 +166,7 @@ export const diskCache = new DiskCache();
  * @returns {Promise<string | undefined>} - Character card data
  */
 async function readCharacterData(inputFile, inputFormat = 'png') {
-    const stat = fs.statSync(inputFile);
-    const cacheKey = `${inputFile}-${stat.mtimeMs}`;
+    const cacheKey = getCacheKey(inputFile);
     if (memoryCache.has(cacheKey)) {
         return memoryCache.get(cacheKey);
     }
@@ -220,7 +207,7 @@ async function writeCharacterData(inputFile, data, outputFile, request, crop = u
             }
         }
         if (useDiskCache && !Buffer.isBuffer(inputFile)) {
-            diskCache.removalQueue.push({ item: inputFile, timestamp: Date.now() });
+            diskCache.syncQueue.add(request.user.profile.handle);
         }
         /**
          * Read the image, resize, and save it as a PNG into the buffer.
