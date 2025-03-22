@@ -5970,6 +5970,7 @@ function extractMultiSwipes(data, type) {
  * @param {array} [options.stoppingStrings] Array of stopping strings.
  * @param {boolean} [options.includeUserPromptBias] Whether to permit prepending the user prompt bias at the beginning.
  * @param {boolean} [options.trimNames] Whether to allow trimming "{{char}}:" or "{{user}}:" from the beginning.
+ * @param {boolean} [options.trimWrongNames] Whether to allow deleting responses prefixed by the incorrect name, depending on isImpersonate
  *
  * @returns {string} The formatted message
  */
