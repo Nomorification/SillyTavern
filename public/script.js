@@ -3563,9 +3563,10 @@ class StreamingProcessor {
  * @param {boolean} quietToLoud true to generate a message in system mode, false to generate a message in character mode
  * @param {string} [systemPrompt] System prompt to use. Only Instruct mode or OpenAI.
  * @param {number} [responseLength] Maximum response length. If unset, the global default value is used.
+ * @param {boolean} [trimNames] Whether to allow trimming "{{user}}:" and "{{char}}:" from the response.
  * @returns {Promise<string>} Generated message
  */
-export async function generateRaw(prompt, api, instructOverride, quietToLoud, systemPrompt, responseLength) {
+export async function generateRaw(prompt, api, instructOverride, quietToLoud, systemPrompt, responseLength, trimNames = true) {
     if (!api) {
         api = main_api;
     }
@@ -3661,6 +3662,8 @@ export async function generateRaw(prompt, api, instructOverride, quietToLoud, sy
             isContinue: false,
             displayIncompleteSentences: true,
             includeUserPromptBias: false,
+            trimNames: trimNames,
+            trimWrongNames: trimNames,
         });
 
         if (!message) {
@@ -5970,10 +5973,10 @@ function extractMultiSwipes(data, type) {
  *
  * @returns {string} The formatted message
  */
-export function cleanUpMessage({ getMessage, isImpersonate, isContinue, displayIncompleteSentences = false, stoppingStrings = null, includeUserPromptBias = true, trimNames = true } = {}) {
+export function cleanUpMessage({ getMessage, isImpersonate, isContinue, displayIncompleteSentences = false, stoppingStrings = null, includeUserPromptBias = true, trimNames = true, trimWrongNames = true } = {}) {
     if (arguments.length > 0 && typeof arguments[0] !== 'object') {
         console.trace('cleanUpMessage called with positional arguments. Please use an object instead.');
-        [getMessage, isImpersonate, isContinue, displayIncompleteSentences, stoppingStrings, includeUserPromptBias] = arguments;
+        [getMessage, isImpersonate, isContinue, displayIncompleteSentences, stoppingStrings, includeUserPromptBias, trimNames, trimWrongNames] = arguments;
     }
 
     if (!getMessage) {
@@ -6020,26 +6023,33 @@ export function cleanUpMessage({ getMessage, isImpersonate, isContinue, displayI
     // "trailing whitespace on newlines\nevery line of the string\nsample text"
     getMessage = getMessage.replace(/[^\S\r\n]+$/gm, '');
 
-    // Trim instances of "{{name}}:" from the start of the message+
-    if (trimNames) {
-        let nameToTrim = isImpersonate ? name2 : name1;
-        if (isImpersonate) {
-            nameToTrim = power_user.allow_name2_display ? '' : name2;
-        } else {
-            nameToTrim = power_user.allow_name1_display ? '' : name1;
-        }
+    if (trimWrongNames) {
+        // If this is an impersonation, delete the entire response if it starts with "{{char}}:"
+        // If this isn't an impersonation, delete the entire response if it starts with "{{user}}:"
+        // Also delete any trailing text that starts with the wrong name.
+        // This only occurs if the corresponding "power_user.allow_nameX_display" is false.
 
-        // get text from after the name (and colon) to the end of the string
-        if (nameToTrim && getMessage.indexOf(`${nameToTrim}:`) === 0) {
-            getMessage = getMessage.substring(nameToTrim.length + 1);
-        }
+        let wrongName = isImpersonate
+            ? (power_user.allow_name2_display ? '' : name2)  // char
+            : (power_user.allow_name1_display ? '' : name1);  // user
 
-        // account for case where the name is after a newline
-        let startIndex = getMessage.indexOf(`\n${nameToTrim}:`);
-        if (nameToTrim && startIndex >= 0) {
-            getMessage = getMessage.substring(startIndex + nameToTrim.length + 2);
+        if (wrongName) {
+            // If the message starts with the wrong name, delete the entire response
+            let startIndex = getMessage.indexOf(`${wrongName}`);
+            if (startIndex === 0) {
+                getMessage = '';
+                console.debug(`Message started with the wrong name: "${wrongName}" - response was deleted.`);
+            }
+
+            // If there is trailing text starting with the wrong name, trim it off.
+            startIndex = getMessage.indexOf(`\n${wrongName}:`);
+            if (startIndex >= 0) {
+                getMessage = getMessage.substring(0, startIndex);
+            }
+
+            // remove any whitespace at the beginning
+            getMessage = getMessage.trimStart();
         }
-        getMessage.trimStart();
     }
 
     if (getMessage.indexOf('<|endoftext|>') != -1) {
@@ -6102,9 +6112,12 @@ export function cleanUpMessage({ getMessage, isImpersonate, isContinue, displayI
     }
 
     if (trimNames) {
+        // If this is an impersonation, trim "{{user}}:" from the beginning
+        // If this isn't an impersonation, trim "{{char}}:" from the beginning.
+        // Only applied when the corresponding "power_user.allow_nameX_display" is false.
         const nameToTrim2 = isImpersonate
-            ? (!power_user.allow_name1_display ? name1 : '')
-            : (!power_user.allow_name2_display ? name2 : '');
+            ? (!power_user.allow_name1_display ? name1 : '')  // user
+            : (!power_user.allow_name2_display ? name2 : '');  // char
 
         if (nameToTrim2 && getMessage.startsWith(nameToTrim2 + ':')) {
             getMessage = getMessage.replace(nameToTrim2 + ':', '');
