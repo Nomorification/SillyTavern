@@ -6031,8 +6031,8 @@ export function cleanUpMessage({ getMessage, isImpersonate, isContinue, displayI
         // This only occurs if the corresponding "power_user.allow_nameX_display" is false.
 
         let wrongName = isImpersonate
-            ? (power_user.allow_name2_display ? '' : name2)  // char
-            : (power_user.allow_name1_display ? '' : name1);  // user
+            ? (!power_user.allow_name2_display ? name2 : '')  // char
+            : (!power_user.allow_name1_display ? name1 : '');  // user
 
         if (wrongName) {
             // If the message starts with the wrong name, delete the entire response
