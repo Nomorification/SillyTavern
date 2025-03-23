@@ -115,24 +115,28 @@ class DiskCache {
      * @returns {Promise<void>}
      */
     async verify(directoriesList) {
-        if (!useDiskCache) {
-            return;
-        }
+        try {
+            if (!useDiskCache) {
+                return;
+            }
 
-        const cache = await this.instance();
-        const validKeys = new Set();
-        for (const dir of directoriesList) {
-            const files = fs.readdirSync(dir.characters, { withFileTypes: true });
-            for (const file of files.filter(f => f.isFile() && path.extname(f.name) === '.png')) {
-                const filePath = path.join(dir.characters, file.name);
-                const cacheKey = getCacheKey(filePath);
-                validKeys.add(path.parse(cache.getDatumPath(cacheKey)).base);
+            const cache = await this.instance();
+            const validKeys = new Set();
+            for (const dir of directoriesList) {
+                const files = fs.readdirSync(dir.characters, { withFileTypes: true });
+                for (const file of files.filter(f => f.isFile() && path.extname(f.name) === '.png')) {
+                    const filePath = path.join(dir.characters, file.name);
+                    const cacheKey = getCacheKey(filePath);
+                    validKeys.add(path.parse(cache.getDatumPath(cacheKey)).base);
+                }
             }
-        }
-        for (const key of this.hashedKeys) {
-            if (!validKeys.has(key)) {
-                await cache.removeItem(key);
+            for (const key of this.hashedKeys) {
+                if (!validKeys.has(key)) {
+                    await cache.removeItem(key);
+                }
             }
+        } catch (error) {
+            console.error('Error while verifying disk cache:', error);
         }
     }
 
@@ -172,7 +176,8 @@ async function readCharacterData(inputFile, inputFormat = 'png') {
     }
     if (useDiskCache) {
         try {
-            const cachedData = await diskCache.instance().then(i => i.getItem(cacheKey));
+            const cache = await diskCache.instance();
+            const cachedData = await cache.getItem(cacheKey);
             if (cachedData) {
                 return cachedData;
             }
@@ -185,7 +190,8 @@ async function readCharacterData(inputFile, inputFormat = 'png') {
     !isAndroid && memoryCache.set(cacheKey, result);
     if (useDiskCache) {
         try {
-            await diskCache.instance().then(i => i.setItem(cacheKey, result));
+            const cache = await diskCache.instance();
+            await cache.setItem(cacheKey, result);
         } catch (error) {
             console.warn('Error while writing to disk cache:', error);
         }
