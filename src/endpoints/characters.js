@@ -171,16 +171,24 @@ async function readCharacterData(inputFile, inputFormat = 'png') {
         return memoryCache.get(cacheKey);
     }
     if (useDiskCache) {
-        const cachedData = await diskCache.instance().then(i => i.getItem(cacheKey));
-        if (cachedData) {
-            return cachedData;
+        try {
+            const cachedData = await diskCache.instance().then(i => i.getItem(cacheKey));
+            if (cachedData) {
+                return cachedData;
+            }
+        } catch (error) {
+            console.warn('Error while reading from disk cache:', error);
         }
     }
 
     const result = await parse(inputFile, inputFormat);
     !isAndroid && memoryCache.set(cacheKey, result);
     if (useDiskCache) {
-        await diskCache.instance().then(i => i.setItem(cacheKey, result));
+        try {
+            await diskCache.instance().then(i => i.setItem(cacheKey, result));
+        } catch (error) {
+            console.warn('Error while writing to disk cache:', error);
+        }
     }
     return result;
 }
