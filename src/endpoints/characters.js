@@ -103,7 +103,7 @@ class DiskCache {
             return this.#instance;
         }
 
-        this.#instance = storage.create({ dir: this.cachePath, ttl: false });
+        this.#instance = storage.create({ dir: this.cachePath, ttl: false, forgiveParseErrors: true });
         await this.#instance.init();
         this.#syncInterval = setInterval(this.#syncCacheEntries.bind(this), DiskCache.SYNC_INTERVAL);
         return this.#instance;
