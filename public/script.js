@@ -6047,9 +6047,6 @@ export function cleanUpMessage({ getMessage, isImpersonate, isContinue, displayI
             if (startIndex >= 0) {
                 getMessage = getMessage.substring(0, startIndex);
             }
-
-            // remove any whitespace at the beginning
-            getMessage = getMessage.trimStart();
         }
     }
 
