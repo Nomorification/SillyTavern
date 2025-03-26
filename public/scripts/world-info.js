@@ -2680,8 +2680,10 @@ export async function getWorldEntry(name, data, entry) {
         $(counter).text(numberOfTokens);
     }, debounce_timeout.relaxed);
 
+    const contentInputId = `world_entry_content_${entry.uid}`;
     const contentInput = template.find('textarea[name="content"]');
     contentInput.data('uid', entry.uid);
+    contentInput.attr('id', contentInputId);
     contentInput.on('input', async function (_, { skipCount } = {}) {
         const uid = $(this).data('uid');
         const value = $(this).val();
@@ -2698,7 +2700,9 @@ export async function getWorldEntry(name, data, entry) {
         countTokensDebounced(counter, value);
     });
     contentInput.val(entry.content).trigger('input', { skipCount: true });
-    //initScrollHeight(contentInput);
+
+    const contentExpandButton = template.find('.editor_maximize');
+    contentExpandButton.attr('data-for', contentInputId);
 
     template.find('.inline-drawer-toggle').on('click', function () {
         if (counter.data('first-run')) {
