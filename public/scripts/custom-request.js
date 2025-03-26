@@ -313,32 +313,30 @@ export class TextCompletionService {
             }
 
             if (instructPreset) {
-                if (instructPreset.stop_sequence) {
-                    const index = message.indexOf(instructPreset.stop_sequence);
-                    if (index != -1) {
-                        message = message.substring(0, index);
+                [
+                    instructPreset.stop_sequence,
+                    instructPreset.input_sequence,
+                ].forEach(sequence => {
+                    if (sequence?.trim()) {
+                        const index = message.indexOf(sequence);
+                        if (index !== -1) {
+                            message = message.substring(0, index);
+                        }
                     }
-                }
-                if (instructPreset.input_sequence && instructPreset.input_sequence.trim()) {
-                    const index = message.indexOf(instructPreset.input_sequence);
-                    if (index != -1) {
-                        message = message.substring(0, index);
+                });
+
+                [
+                    instructPreset.output_sequence,
+                    instructPreset.last_output_sequence,
+                ].forEach(sequences => {
+                    if (sequences) {
+                        sequences.split('\n')
+                            .filter(line => line.trim() !== '')
+                            .forEach(line => {
+                                message = message.replaceAll(line, '');
+                            });
                     }
-                }
-                if (instructPreset.output_sequence) {
-                    instructPreset.output_sequence.split('\n')
-                        .filter(line => line.trim() !== '')
-                        .forEach(line => {
-                            message = message.replaceAll(line, '');
-                        });
-                }
-                if (instructPreset.last_output_sequence) {
-                    instructPreset.last_output_sequence.split('\n')
-                        .filter(line => line.trim() !== '')
-                        .forEach(line => {
-                            message = message.replaceAll(line, '');
-                        });
-                }
+                });
             }
 
             extractedData.content = message;
