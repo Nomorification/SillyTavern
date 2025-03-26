@@ -5301,6 +5301,11 @@ function formatMessageHistoryItem(chatItem, isInstruct, forceOutputSequence) {
     const itemName = chatItem.is_user ? chatItem['name'] : characterName;
     const shouldPrependName = !isNarratorType;
 
+    // Don't format messages with undefined content
+    if (chatItem.mes === undefined) {
+        return ""
+    }
+
     // Don't include a name if it's empty
     let textResult = chatItem?.name && shouldPrependName ? `${itemName}: ${chatItem.mes}\n` : `${chatItem.mes}\n`;
 
