@@ -5303,7 +5303,7 @@ function formatMessageHistoryItem(chatItem, isInstruct, forceOutputSequence) {
 
     // If this flag is set, completely ignore the message.
     // This can be used to hide messages without affecting the number of messages in the chat.
-    if (chatItem.ignore_formatting) {
+    if (chatItem.extra?.ignore) {
         return '';
     }
 

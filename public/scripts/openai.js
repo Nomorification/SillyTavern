@@ -523,6 +523,12 @@ function setOpenAIMessages(chat) {
         let role = chat[j]['is_user'] ? 'user' : 'assistant';
         let content = chat[j]['mes'];
 
+        // If this flag is set, completely ignore the message
+        if (chat[j].extra?.ignore) {
+            j++;
+            continue;
+        }
+
         // 100% legal way to send a message as system
         if (chat[j].extra?.type === system_message_types.NARRATOR) {
             role = 'system';
