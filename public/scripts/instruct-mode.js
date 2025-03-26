@@ -243,10 +243,12 @@ export function autoSelectInstructPreset(modelId) {
 
 /**
  * Converts instruct mode sequences to an array of stopping strings.
- * @param {{customInstruct?: InstructSettings, useStopString?: boolean}} options
+ * @param {Object} options
+ * @param {InstructSettings?} [options.customInstruct=null] - Custom instruct settings.
+ * @param {boolean?} [options.useStopStrings=false] - Decides whether to use "Chat Start" and "Example Separator"
  * @returns {string[]} Array of instruct mode stopping strings.
  */
-export function getInstructStoppingSequences({ customInstruct = null, useStopString = false } = {}) {
+export function getInstructStoppingSequences({ customInstruct = null, useStopStrings = false } = {}) {
     const instruct = structuredClone(customInstruct ?? power_user.instruct);
 
     /**
@@ -296,7 +298,7 @@ export function getInstructStoppingSequences({ customInstruct = null, useStopStr
         combined_sequence.split('\n').filter((line, index, self) => self.indexOf(line) === index).forEach(addInstructSequence);
     }
 
-    if (useStopString ?? power_user.context.use_stop_strings) {
+    if (useStopStrings ?? power_user.context.use_stop_strings) {
         if (power_user.context.chat_start) {
             result.push(`\n${substituteParams(power_user.context.chat_start)}`);
         }

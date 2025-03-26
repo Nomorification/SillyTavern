@@ -272,7 +272,7 @@ export class TextCompletionService {
                     formattedMessages.push(messageContent);
                 }
                 requestData.prompt = formattedMessages.join('');
-                const stoppingStrings = getInstructStoppingSequences({ customInstruct: instructPreset, useStopString: false });
+                const stoppingStrings = getInstructStoppingSequences({ customInstruct: instructPreset, useStopStrings: false });
                 requestData.stop = stoppingStrings;
                 requestData.stopping_strings = stoppingStrings;
             } else {

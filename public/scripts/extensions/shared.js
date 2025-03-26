@@ -299,7 +299,7 @@ export class ConnectionManagerRequestService {
      * @param {string} profileId
      * @param {string | (import('../custom-request.js').ChatCompletionMessage & {ignoreInstruct?: boolean})[]} prompt
      * @param {number} maxTokens
-     * @param {object} custom
+     * @param {Object} custom
      * @param {boolean?} [custom.stream=false]
      * @param {AbortSignal?} [custom.signal]
      * @param {boolean?} [custom.extractData=true]
