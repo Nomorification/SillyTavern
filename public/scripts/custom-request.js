@@ -2,7 +2,7 @@ import { getPresetManager } from './preset-manager.js';
 import { extractMessageFromData, getGenerateUrl, getRequestHeaders } from '../script.js';
 import { getTextGenServer } from './textgen-settings.js';
 import { extractReasoningFromData } from './reasoning.js';
-import { formatInstructModeChat, formatInstructModePrompt, names_behavior_types } from './instruct-mode.js';
+import { formatInstructModeChat, formatInstructModePrompt, getInstructStoppingSequences, names_behavior_types } from './instruct-mode.js';
 import { getStreamingReply, tryParseStreamingError } from './openai.js';
 import EventSourceStream from './sse-stream.js';
 
@@ -222,10 +222,13 @@ export class TextCompletionService {
             }
         }
 
+
+        /** @type {InstructSettings | undefined} */
+        let instructPreset;
         // Handle instruct formatting if requested
         if (Array.isArray(prompt) && instructName) {
             const instructPresetManager = getPresetManager('instruct');
-            let instructPreset = instructPresetManager?.getCompletionPresetByName(instructName);
+            instructPreset = instructPresetManager?.getCompletionPresetByName(instructName);
             if (instructPreset) {
                 // Clone the preset to avoid modifying the original
                 instructPreset = structuredClone(instructPreset);
@@ -266,10 +269,9 @@ export class TextCompletionService {
                     formattedMessages.push(messageContent);
                 }
                 requestData.prompt = formattedMessages.join('');
-                if (instructPreset.output_suffix) {
-                    requestData.stop = [instructPreset.output_suffix];
-                    requestData.stopping_strings = [instructPreset.output_suffix];
-                }
+                const stoppingStrings = getInstructStoppingSequences({ customInstruct: instructPreset, useStopString: false });
+                requestData.stop = stoppingStrings
+                requestData.stopping_strings = stoppingStrings;
             } else {
                 console.warn(`Instruct preset "${instructName}" not found, using basic formatting`);
                 requestData.prompt = prompt.map(x => x.content).join('\n\n');
@@ -283,7 +285,63 @@ export class TextCompletionService {
         // @ts-ignore
         const data = this.createRequestData(requestData);
 
-        return await this.sendRequest(data, extractData, signal);
+        const response = await this.sendRequest(data, extractData, signal);
+        // Remove stopping strings from the end
+        if (!data.stream && extractData) {
+            /** @type {ExtractedData} */
+            // @ts-ignore
+            const extractedData = response;
+
+            let message = extractedData.content;
+
+            message = message.replace(/[^\S\r\n]+$/gm, '');
+
+            if (requestData.stopping_strings) {
+                for (const stoppingString of requestData.stopping_strings) {
+                    if (stoppingString.length) {
+                        for (let j = stoppingString.length; j > 0; j--) {
+                            if (message.slice(-j) === stoppingString.slice(0, j)) {
+                                message = message.slice(0, -j);
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (instructPreset) {
+                if (instructPreset.stop_sequence) {
+                    const index = message.indexOf(instructPreset.stop_sequence);
+                    if (index != -1) {
+                        message = message.substring(0, index);
+                    }
+                }
+                if (instructPreset.input_sequence && instructPreset.input_sequence.trim()) {
+                    const index = message.indexOf(instructPreset.input_sequence);
+                    if (index != -1) {
+                        message = message.substring(0, index);
+                    }
+                }
+                if (instructPreset.output_sequence) {
+                    instructPreset.output_sequence.split('\n')
+                        .filter(line => line.trim() !== '')
+                        .forEach(line => {
+                            message = message.replaceAll(line, '');
+                        });
+                }
+                if (instructPreset.last_output_sequence) {
+                    instructPreset.last_output_sequence.split('\n')
+                        .filter(line => line.trim() !== '')
+                        .forEach(line => {
+                            message = message.replaceAll(line, '');
+                        });
+                }
+            }
+
+            extractedData.content = message;
+        }
+
+        return response;
     }
 
     /**
