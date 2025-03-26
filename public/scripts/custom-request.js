@@ -190,6 +190,7 @@ export class TextCompletionService {
      * @param {Object} options - Configuration options
      * @param {string?} [options.presetName] - Name of the preset to use for generation settings
      * @param {string?} [options.instructName] - Name of instruct preset for message formatting
+     * @param {Partial<InstructSettings>?} [options.instructSettings] - Override instruct settings
      * @param {boolean} extractData - Whether to extract structured data from response
      * @param {AbortSignal?} [signal]
      * @returns {Promise<ExtractedData | (() => AsyncGenerator<StreamResponse>)>} If not streaming, returns extracted data; if streaming, returns a function that creates an AsyncGenerator
@@ -232,8 +233,10 @@ export class TextCompletionService {
             if (instructPreset) {
                 // Clone the preset to avoid modifying the original
                 instructPreset = structuredClone(instructPreset);
-                instructPreset.macro = false;
                 instructPreset.names_behavior = names_behavior_types.NONE;
+                if (options.instructSettings) {
+                    Object.assign(instructPreset, options.instructSettings);
+                }
 
                 // Format messages using instruct formatting
                 const formattedMessages = [];
@@ -270,7 +273,7 @@ export class TextCompletionService {
                 }
                 requestData.prompt = formattedMessages.join('');
                 const stoppingStrings = getInstructStoppingSequences({ customInstruct: instructPreset, useStopString: false });
-                requestData.stop = stoppingStrings
+                requestData.stop = stoppingStrings;
                 requestData.stopping_strings = stoppingStrings;
             } else {
                 console.warn(`Instruct preset "${instructName}" not found, using basic formatting`);
