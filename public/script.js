@@ -5303,7 +5303,7 @@ function formatMessageHistoryItem(chatItem, isInstruct, forceOutputSequence) {
 
     // Don't format messages with undefined content
     if (chatItem.mes === undefined) {
-        return ""
+        return '';
     }
 
     // Don't include a name if it's empty
