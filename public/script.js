@@ -5301,8 +5301,9 @@ function formatMessageHistoryItem(chatItem, isInstruct, forceOutputSequence) {
     const itemName = chatItem.is_user ? chatItem['name'] : characterName;
     const shouldPrependName = !isNarratorType;
 
-    // Don't format messages with undefined content
-    if (chatItem.mes === undefined) {
+    // If this flag is set, completely ignore the message.
+    // This can be used to hide messages without affecting the number of messages in the chat.
+    if (chatItem.ignore_formatting) {
         return '';
     }
 
