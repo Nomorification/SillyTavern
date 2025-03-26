@@ -274,7 +274,7 @@ async function getLastMessageSprite(avatar) {
     return null;
 }
 
-async function visualNovelUpdateLayers(container) {
+export async function visualNovelUpdateLayers(container) {
     const context = getContext();
     const group = context.groups.find(x => x.id == context.groupId);
     const recentMessages = context.chat.map(x => x.original_avatar).filter(x => x).reverse().filter(onlyUnique);
