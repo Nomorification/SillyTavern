@@ -2233,7 +2233,7 @@ export function setWIOriginalDataValue(data, uid, key, value) {
 export function deleteWIOriginalDataValue(data, uid) {
     if (data.originalData && Array.isArray(data.originalData.entries)) {
         // Non-strict equality is used here to allow for both string and number comparisons
-        // @eslint-disable-next-line eqeqeqeq
+        // @eslint-disable-next-line eqeqeq
         const originalIndex = data.originalData.entries.findIndex(x => x.uid == uid);
 
         if (originalIndex >= 0) {
