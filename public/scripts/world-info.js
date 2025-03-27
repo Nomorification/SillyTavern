@@ -2208,7 +2208,7 @@ function verifyWorldInfoSearchSortRule() {
  * Use `originalWIDataKeyMap` to find the correct value to be set.
  *
  * @param {object} data - The data object containing the original data entries.
- * @param {string} uid - The unique identifier of the data entry.
+ * @param {number} uid - The unique identifier of the data entry.
  * @param {string} key - The key of the value to be set.
  * @param {any} value - The value to be set.
  */
@@ -3145,21 +3145,38 @@ export async function getWorldEntry(name, data, entry) {
 
     // move button
     const moveButton = template.find('.move_entry_button');
-    moveButton.data('uid', entry.uid);
-    moveButton.data('current-world', name);
+    moveButton.attr('data-uid', entry.uid);
+    moveButton.attr('data-current-world', name);
     moveButton.on('click', async function (e) {
         e.stopPropagation();
         const sourceUid = $(this).data('uid');
         const sourceWorld = $(this).data('current-world');
-        // Loading world info is bad, do we have cache variable?
-        const sourceName = (await loadWorldInfo(sourceWorld)).entries[sourceUid].comment;
+        const sourceWorldInfo = await loadWorldInfo(sourceWorld);
+        if (!sourceWorldInfo) {
+            return;
+        }
+        const sourceName = sourceWorldInfo.entries[sourceUid]?.comment;
+        if (sourceName === undefined) {
+            return;
+        }
 
-        let optionsHtml = `<option value="">-- ${t`Select Target Lorebook`} --</option>`;
+        const select = document.createElement('select');
+        select.id = 'move_entry_target_select';
+        select.classList.add('text_pole', 'wide100p', 'margin-top');
+
+        const defaultOption = document.createElement('option');
+        defaultOption.value = '';
+        defaultOption.textContent = `-- ${t`Select Target Lorebook`} --`;
+        select.appendChild(defaultOption);
+
         let selectableWorldCount = 0;
         world_names.forEach(worldName => {
-            if (worldName !== sourceWorld) { // Exclude the current world
-                optionsHtml += `<option value="${world_names.indexOf(worldName)}">${worldName}</option>`;
-                selectableWorldCount += 1;
+            if (worldName !== sourceWorld) { // Exclude current world
+                const option = document.createElement('option');
+                option.value = world_names.indexOf(worldName).toString();
+                option.textContent = worldName;
+                select.appendChild(option);
+                selectableWorldCount++;
             }
         });
 
@@ -3168,27 +3185,24 @@ export async function getWorldEntry(name, data, entry) {
             return;
         }
 
-        const content = `
-            <div>${t`Move ${sourceName} to:`}</div>
-            <select id="move_entry_target_select" class="text_pole wide100p margin-top">
-                ${optionsHtml}
-            </select>
-        `;
+        // Create wrapper div
+        const wrapper = document.createElement('div');
+        wrapper.textContent = t`Move ${sourceName} to:`;
 
-        const popupPromise = callGenericPopup(content, POPUP_TYPE.CONFIRM, '', {
+        // Create container and append elements
+        const container = document.createElement('div');
+        container.appendChild(wrapper);
+        container.appendChild(select);
+
+        let selectedWorldIndex = -1;
+        select.addEventListener('change', function() {
+            selectedWorldIndex = this.value === '' ? -1 : Number(this.value);
+        });
+
+        const popupConfirm = await callGenericPopup(container, POPUP_TYPE.CONFIRM, '', {
             okButton: t`Move`,
             cancelButton: t`Cancel`,
         });
-
-        let selectedWorldIndex = -1;
-        $('#move_entry_target_select').on('change', function () {
-            /** @type {string} */
-            // @ts-ignore
-            const value = $(this).val();
-            selectedWorldIndex = value === '' ? -1 : Number(value);
-        });
-
-        const popupConfirm = await popupPromise;
         if (!popupConfirm) {
             return;
         }
@@ -5341,19 +5355,11 @@ jQuery(() => {
  *
  * @param {string} sourceName - The name of the source lorebook file.
  * @param {string} targetName - The name of the target lorebook file.
- * @param {number|string} uid - The UID of the entry to move from the source lorebook.
+ * @param {number} uid - The UID of the entry to move from the source lorebook.
  * @returns {Promise<boolean>} True if the move was successful, false otherwise.
  */
 export async function moveWorldInfoEntry(sourceName, targetName, uid) {
-    console.log(`[WI] Attempting to move entry UID ${uid} from '${sourceName}' to '${targetName}'`);
-
-    if (!sourceName || !targetName || uid === undefined || uid === null) {
-        console.error('[WI Move] Missing required arguments.');
-        return false;
-    }
-
     if (sourceName === targetName) {
-        toastr.warning(t`Source and target lorebooks cannot be the same.`);
         return false;
     }
 
@@ -5411,20 +5417,19 @@ export async function moveWorldInfoEntry(sourceName, targetName, uid) {
         targetData.entries[newUid] = entryToMove;
 
         delete sourceData.entries[entryUidString];
-        // Remove from originalData if it exists, using the original UID
+        // Remove from originalData if it exists
         deleteWIOriginalDataValue(sourceData, entryUidString);
+        // TODO: setWIOriginalDataValue
         console.debug(`[WI Move] Removed entry UID ${entryUidString} from source '${sourceName}'.`);
 
 
-        // Save immediately to reduce chances of inconsistency if the browser is closed
-        // Note: This is not truly atomic. If one save fails, state could be inconsistent.
-        await saveWorldInfo(targetName, targetData, true);
+        await saveWorldInfo(targetName, targetData);
         console.debug(`[WI Move] Saved target lorebook '${targetName}'.`);
-        await saveWorldInfo(sourceName, sourceData, true);
+        await saveWorldInfo(sourceName, sourceData);
         console.debug(`[WI Move] Saved source lorebook '${sourceName}'.`);
 
 
-        toastr.success(t`${entryToMove.comment} moved successfully!`);
+        console.log(`[WI Move] ${entryToMove.comment} moved successfully to '${targetName}'.`);
 
         // Check if the currently viewed book in the editor is the source or target and reload it
         const currentEditorBookIndex = Number($('#world_editor_select').val());
