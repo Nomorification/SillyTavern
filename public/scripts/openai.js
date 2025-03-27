@@ -120,7 +120,6 @@ const default_bias_presets = {
 const max_2k = 2047;
 const max_4k = 4095;
 const max_8k = 8191;
-const max_12k = 12287;
 const max_16k = 16383;
 const max_32k = 32767;
 const max_64k = 65535;
