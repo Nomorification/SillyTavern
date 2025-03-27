@@ -1230,7 +1230,7 @@ async function checkForExtensionUpdates(force) {
     for (const [id, manifest] of Object.entries(manifests)) {
         const isDisabled = extension_settings.disabledExtensions.includes(id);
         if (isDisabled) {
-            console.debug(`Skipping extension: ${manifest.display_name} (${id}) for non-admin user`)
+            console.debug(`Skipping extension: ${manifest.display_name} (${id}) for non-admin user`);
             continue;
         }
         const isGlobal = getExtensionType(id) === 'global';
@@ -1277,7 +1277,7 @@ async function autoUpdateExtensions(forceAll) {
     for (const [id, manifest] of Object.entries(manifests)) {
         const isDisabled = extension_settings.disabledExtensions.includes(id);
         if (!forceAll && isDisabled) {
-            console.debug(`Skipping extension: ${manifest.display_name} (${id}) for non-admin user`)
+            console.debug(`Skipping extension: ${manifest.display_name} (${id}) for non-admin user`);
             continue;
         }
         const isGlobal = getExtensionType(id) === 'global';
