@@ -3189,7 +3189,7 @@ export async function getWorldEntry(name, data, entry) {
 
         // Create wrapper div
         const wrapper = document.createElement('div');
-        wrapper.textContent = t`Move ${sourceName} to:`;
+        wrapper.textContent = t`Move "${sourceName}" to:`;
 
         // Create container and append elements
         const container = document.createElement('div');
