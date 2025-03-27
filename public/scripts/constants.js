@@ -15,9 +15,10 @@ export const debounce_timeout = {
     extended: 5000,
 };
 
-/*
-Used as an ephemeral key in message extra metadata.
-When set, the message will be excluded from generation prompts without affecting the number of chat messages,
-    which is needed to preserve world info timed effects.
+/**
+ * Used as an ephemeral key in message extra metadata.
+ * When set, the message will be excluded from generation
+ * prompts without affecting the number of chat messages,
+ * which is needed to preserve world info timed effects.
  */
 export const IGNORE_SYMBOL = Symbol.for('ignore');
