@@ -3143,6 +3143,70 @@ export async function getWorldEntry(name, data, entry) {
         updateEditor(navigation_option.previous);
     });
 
+    // move button
+    const moveButton = template.find('.move_entry_button');
+    moveButton.data('uid', entry.uid);
+    moveButton.data('current-world', name);
+    moveButton.on('click', async function (e) {
+        e.stopPropagation();
+        const sourceUid = $(this).data('uid');
+        const sourceWorld = $(this).data('current-world');
+        // Loading world info is bad, do we have cache variable?
+        const sourceName = (await loadWorldInfo(sourceWorld)).entries[sourceUid].comment;
+
+        let optionsHtml = `<option value="">-- ${t`Select Target Lorebook`} --</option>`;
+        let selectableWorldCount = 0;
+        world_names.forEach(worldName => {
+            if (worldName !== sourceWorld) { // Exclude the current world
+                optionsHtml += `<option value="${world_names.indexOf(worldName)}">${worldName}</option>`;
+                selectableWorldCount += 1;
+            }
+        });
+
+        if (selectableWorldCount === 0) {
+            toastr.warning(t`There are no other lorebooks to move to.`);
+            return;
+        }
+
+        const content = `
+            <div>${t`Move ${sourceName} to:`}</div>
+            <select id="move_entry_target_select" class="text_pole wide100p margin-top">
+                ${optionsHtml}
+            </select>
+        `;
+
+        const popupPromise = callGenericPopup(content, POPUP_TYPE.CONFIRM, '', {
+            okButton: t`Move`,
+            cancelButton: t`Cancel`,
+        });
+
+        let selectedWorldIndex = -1;
+        $('#move_entry_target_select').on('change', function () {
+            /** @type {string} */
+            // @ts-ignore
+            const value = $(this).val();
+            selectedWorldIndex = value === '' ? -1 : Number(value);
+        });
+
+        const popupConfirm = await popupPromise;
+        if (!popupConfirm) {
+            return;
+        }
+
+        if (selectedWorldIndex === -1) {
+            return;
+        }
+
+        const selectedValue = world_names[selectedWorldIndex];
+
+        if (!selectedValue) {
+            toastr.warning(t`Please select a target lorebook.`);
+            return;
+        }
+
+        await moveWorldInfoEntry(sourceWorld, selectedValue, sourceUid);
+    });
+
     // scan depth
     const scanDepthInput = template.find('input[name="scanDepth"]');
     scanDepthInput.data('uid', entry.uid);
@@ -5271,3 +5335,110 @@ jQuery(() => {
         });
     });
 });
+
+/**
+ * Moves a World Info entry from a source lorebook to a target lorebook.
+ *
+ * @param {string} sourceName - The name of the source lorebook file.
+ * @param {string} targetName - The name of the target lorebook file.
+ * @param {number|string} uid - The UID of the entry to move from the source lorebook.
+ * @returns {Promise<boolean>} True if the move was successful, false otherwise.
+ */
+export async function moveWorldInfoEntry(sourceName, targetName, uid) {
+    console.log(`[WI] Attempting to move entry UID ${uid} from '${sourceName}' to '${targetName}'`);
+
+    if (!sourceName || !targetName || uid === undefined || uid === null) {
+        console.error('[WI Move] Missing required arguments.');
+        return false;
+    }
+
+    if (sourceName === targetName) {
+        toastr.warning(t`Source and target lorebooks cannot be the same.`);
+        return false;
+    }
+
+    if (!world_names.includes(sourceName)) {
+        toastr.error(t`Source lorebook '${sourceName}' not found.`);
+        console.error(`[WI Move] Source lorebook '${sourceName}' does not exist.`);
+        return false;
+    }
+
+    if (!world_names.includes(targetName)) {
+        toastr.error(t`Target lorebook '${targetName}' not found.`);
+        console.error(`[WI Move] Target lorebook '${targetName}' does not exist.`);
+        return false;
+    }
+
+    const entryUidString = String(uid);
+
+    try {
+        const sourceData = await loadWorldInfo(sourceName);
+        const targetData = await loadWorldInfo(targetName);
+
+        if (!sourceData || !sourceData.entries) {
+            toastr.error(t`Failed to load data for source lorebook '${sourceName}'.`);
+            console.error(`[WI Move] Could not load source data for '${sourceName}'.`);
+            return false;
+        }
+        if (!targetData || !targetData.entries) {
+            toastr.error(t`Failed to load data for target lorebook '${targetName}'.`);
+            console.error(`[WI Move] Could not load target data for '${targetName}'.`);
+            return false;
+        }
+
+        if (!sourceData.entries[entryUidString]) {
+            toastr.error(t`Entry not found in source lorebook '${sourceName}'.`);
+            console.error(`[WI Move] Entry UID ${entryUidString} not found in '${sourceName}'.`);
+            return false;
+        }
+
+        const entryToMove = structuredClone(sourceData.entries[entryUidString]);
+
+
+        const newUid = getFreeWorldEntryUid(targetData);
+        if (newUid === null) {
+            console.error(`[WI Move] Failed to get a free UID in '${targetName}'.`);
+            return false;
+        }
+
+        entryToMove.uid = newUid;
+        // Reset displayIndex or let it be recalculated based on target book's sorting?
+        // For simplicity, let's assign a high index initially, assuming it might be sorted later.
+        // Or maybe better, find the max displayIndex in target and add 1?
+        const maxDisplayIndex = Object.values(targetData.entries).reduce((max, entry) => Math.max(max, entry.displayIndex ?? -1), -1);
+        entryToMove.displayIndex = maxDisplayIndex + 1;
+
+        targetData.entries[newUid] = entryToMove;
+
+        delete sourceData.entries[entryUidString];
+        // Remove from originalData if it exists, using the original UID
+        deleteWIOriginalDataValue(sourceData, entryUidString);
+        console.debug(`[WI Move] Removed entry UID ${entryUidString} from source '${sourceName}'.`);
+
+
+        // Save immediately to reduce chances of inconsistency if the browser is closed
+        // Note: This is not truly atomic. If one save fails, state could be inconsistent.
+        await saveWorldInfo(targetName, targetData, true);
+        console.debug(`[WI Move] Saved target lorebook '${targetName}'.`);
+        await saveWorldInfo(sourceName, sourceData, true);
+        console.debug(`[WI Move] Saved source lorebook '${sourceName}'.`);
+
+
+        toastr.success(t`${entryToMove.comment} moved successfully!`);
+
+        // Check if the currently viewed book in the editor is the source or target and reload it
+        const currentEditorBookIndex = Number($('#world_editor_select').val());
+        if (!isNaN(currentEditorBookIndex)) {
+            const currentEditorBookName = world_names[currentEditorBookIndex];
+            if (currentEditorBookName === sourceName || currentEditorBookName === targetName) {
+                reloadEditor(currentEditorBookName);
+            }
+        }
+
+        return true;
+    } catch (error) {
+        toastr.error(t`An unexpected error occurred while moving the entry: ${error.message}`);
+        console.error('[WI Move] Unexpected error:', error);
+        return false;
+    }
+}
