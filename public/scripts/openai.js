@@ -75,7 +75,7 @@ import { Popup, POPUP_RESULT } from './popup.js';
 import { t } from './i18n.js';
 import { ToolManager } from './tool-calling.js';
 import { accountStorage } from './util/AccountStorage.js';
-import {IGNORE_SYMBOL} from "./constants.js";
+import { IGNORE_SYMBOL } from './constants.js';
 
 export {
     openai_messages_count,
