@@ -174,7 +174,7 @@ import {
     saveBase64AsFile,
     uuidv4,
 } from './scripts/utils.js';
-import { debounce_timeout } from './scripts/constants.js';
+import { debounce_timeout, IGNORE_SYMBOL } from './scripts/constants.js';
 
 import { doDailyExtensionUpdatesCheck, extension_settings, initExtensions, loadExtensionSettings, runGenerationInterceptors, saveMetadataDebounced } from './scripts/extensions.js';
 import { COMMENT_NAME_DEFAULT, executeSlashCommandsOnChatInput, getSlashCommandsHelp, initDefaultSlashCommands, isExecutingCommandsFromChatInput, pauseScriptExecution, processChatSlashCommands, stopScriptExecution } from './scripts/slash-commands.js';
@@ -5295,6 +5295,7 @@ export function getBiasStrings(textareaText, type) {
  * @param {boolean} isInstruct Whether instruct mode is enabled.
  * @param {boolean|number} forceOutputSequence Whether to force the first/last output sequence for instruct mode.
  */
+
 function formatMessageHistoryItem(chatItem, isInstruct, forceOutputSequence) {
     const isNarratorType = chatItem?.extra?.type === system_message_types.NARRATOR;
     const characterName = chatItem?.name ? chatItem.name : name2;
@@ -5303,7 +5304,7 @@ function formatMessageHistoryItem(chatItem, isInstruct, forceOutputSequence) {
 
     // If this flag is set, completely ignore the message.
     // This can be used to hide messages without affecting the number of messages in the chat.
-    if (chatItem.extra?.ignore) {
+    if (chatItem.extra?.[IGNORE_SYMBOL]) {
         return '';
     }
 
