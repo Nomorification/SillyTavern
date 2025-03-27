@@ -5410,9 +5410,7 @@ export async function moveWorldInfoEntry(sourceName, targetName, uid) {
         }
 
         entryToMove.uid = newUid;
-        // Reset displayIndex or let it be recalculated based on target book's sorting?
-        // For simplicity, let's assign a high index initially, assuming it might be sorted later.
-        // Or maybe better, find the max displayIndex in target and add 1?
+        // Place the entry at the end of the target lorebook
         const maxDisplayIndex = Object.values(targetData.entries).reduce((max, entry) => Math.max(max, entry.displayIndex ?? -1), -1);
         entryToMove.displayIndex = maxDisplayIndex + 1;
 
