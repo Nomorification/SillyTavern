@@ -524,7 +524,8 @@ function setOpenAIMessages(chat) {
         let role = chat[j]['is_user'] ? 'user' : 'assistant';
         let content = chat[j]['mes'];
 
-        // If this flag is set, completely ignore the message
+        // If this flag is set, completely ignore the message.
+        // This can be used to hide messages without affecting the number of messages in the chat.
         if (chat[j].extra?.[IGNORE_SYMBOL]) {
             j++;
             continue;

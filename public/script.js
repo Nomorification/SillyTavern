@@ -5295,14 +5295,13 @@ export function getBiasStrings(textareaText, type) {
  * @param {boolean} isInstruct Whether instruct mode is enabled.
  * @param {boolean|number} forceOutputSequence Whether to force the first/last output sequence for instruct mode.
  */
-
 function formatMessageHistoryItem(chatItem, isInstruct, forceOutputSequence) {
     const isNarratorType = chatItem?.extra?.type === system_message_types.NARRATOR;
     const characterName = chatItem?.name ? chatItem.name : name2;
     const itemName = chatItem.is_user ? chatItem['name'] : characterName;
     const shouldPrependName = !isNarratorType;
 
-    // If this flag is set, completely ignore the message.
+    // If this symbol flag is set, completely ignore the message.
     // This can be used to hide messages without affecting the number of messages in the chat.
     if (chatItem.extra?.[IGNORE_SYMBOL]) {
         return '';
