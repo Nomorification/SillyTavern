@@ -3149,8 +3149,8 @@ export async function getWorldEntry(name, data, entry) {
     moveButton.attr('data-current-world', name);
     moveButton.on('click', async function (e) {
         e.stopPropagation();
-        const sourceUid = $(this).data('uid');
-        const sourceWorld = $(this).data('current-world');
+        const sourceUid = $(this).attr('data-uid');
+        const sourceWorld = $(this).attr('data-current-world');
         const sourceWorldInfo = await loadWorldInfo(sourceWorld);
         if (!sourceWorldInfo) {
             return;
