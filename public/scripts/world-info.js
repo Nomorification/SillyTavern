@@ -5355,7 +5355,7 @@ jQuery(() => {
  *
  * @param {string} sourceName - The name of the source lorebook file.
  * @param {string} targetName - The name of the target lorebook file.
- * @param {number} uid - The UID of the entry to move from the source lorebook.
+ * @param {string|number} uid - The UID of the entry to move from the source lorebook.
  * @returns {Promise<boolean>} True if the move was successful, false otherwise.
  */
 export async function moveWorldInfoEntry(sourceName, targetName, uid) {
