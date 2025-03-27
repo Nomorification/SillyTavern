@@ -245,10 +245,10 @@ export function autoSelectInstructPreset(modelId) {
  * Converts instruct mode sequences to an array of stopping strings.
  * @param {Object} options
  * @param {InstructSettings?} [options.customInstruct=null] - Custom instruct settings.
- * @param {boolean?} [options.useStopStrings=false] - Decides whether to use "Chat Start" and "Example Separator"
+ * @param {boolean?} [options.useStopStrings] - Decides whether to use "Chat Start" and "Example Separator"
  * @returns {string[]} Array of instruct mode stopping strings.
  */
-export function getInstructStoppingSequences({ customInstruct = null, useStopStrings = false } = {}) {
+export function getInstructStoppingSequences({ customInstruct = null, useStopStrings = null } = {}) {
     const instruct = structuredClone(customInstruct ?? power_user.instruct);
 
     /**
