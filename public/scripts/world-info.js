@@ -2232,7 +2232,7 @@ export function setWIOriginalDataValue(data, uid, key, value) {
  */
 export function deleteWIOriginalDataValue(data, uid) {
     if (data.originalData && Array.isArray(data.originalData.entries)) {
-        const originalIndex = data.originalData.entries.findIndex(x => x.uid === uid);
+        const originalIndex = data.originalData.entries.findIndex(x => String(x.uid) === String(uid));
 
         if (originalIndex >= 0) {
             data.originalData.entries.splice(originalIndex, 1);
