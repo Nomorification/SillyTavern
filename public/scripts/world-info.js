@@ -3162,7 +3162,7 @@ export async function getWorldEntry(name, data, entry) {
 
         const select = document.createElement('select');
         select.id = 'move_entry_target_select';
-        select.classList.add('text_pole', 'wide100p', 'margin-top');
+        select.classList.add('text_pole', 'wide100p', 'marginTop10');
 
         const defaultOption = document.createElement('option');
         defaultOption.value = '';
