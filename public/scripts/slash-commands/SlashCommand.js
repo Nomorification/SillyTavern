@@ -36,6 +36,7 @@ export class SlashCommand {
      * @param {string} [props.helpString]
      * @param {boolean} [props.splitUnnamedArgument]
      * @param {Number} [props.splitUnnamedArgumentCount]
+     * @param {boolean} [props.rawQuotes]
      * @param {string[]} [props.aliases]
      * @param {string} [props.returns]
      * @param {SlashCommandNamedArgument[]} [props.namedArgumentList]
@@ -54,6 +55,7 @@ export class SlashCommand {
     /**@type {string}*/ helpString;
     /**@type {boolean}*/ splitUnnamedArgument = false;
     /**@type {Number}*/ splitUnnamedArgumentCount;
+    /** @type {boolean} */ rawQuotes = false;
     /**@type {string[]}*/ aliases = [];
     /**@type {string}*/ returns;
     /**@type {SlashCommandNamedArgument[]}*/ namedArgumentList = [];
