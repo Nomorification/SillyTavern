@@ -566,9 +566,10 @@ export class SlashCommandParser {
      * Expects that the current char is taken after testing.
      * @param {string|RegExp} sequence Sequence of chars or regex character group that is the symbol.
      * @param {number} offset Offset from the current index (won't move the index if offset != 0).
+     * @param {boolean} escape Whether to escape the symbol with backslashes.
      * @returns Whether the next characters are the indicated symbol.
      */
-    testSymbol(sequence, offset = 0) {
+    testSymbol(sequence, offset = 0, escape = true) {
         if (!this.flags[PARSER_FLAG.STRICT_ESCAPING]) return this.testSymbolLooseyGoosey(sequence, offset);
         // /echo abc | /echo def
         // -> TOAST: abc
@@ -587,7 +588,7 @@ export class SlashCommandParser {
         // -> TOAST: *:}* {:
         // -> TOAST: *{:* :}
         const escapeOffset = this.jumpedEscapeSequence ? -1 : 0;
-        const escapes = this.text.slice(this.index + offset + escapeOffset).replace(/^(\\*).*$/s, '$1').length;
+        const escapes = escape ? this.text.slice(this.index + offset + escapeOffset).replace(/^(\\*).*$/s, '$1').length : 0;
         const test = (sequence instanceof RegExp) ?
             (text) => new RegExp(`^${sequence.source}`).test(text) :
             (text) => text.startsWith(sequence)
@@ -1045,6 +1046,9 @@ export class SlashCommandParser {
         /**@type {SlashCommandUnnamedArgumentAssignment}*/
         let assignment = new SlashCommandUnnamedArgumentAssignment();
         assignment.start = this.index;
+        if (rawQuotes && this.testEscapedQuote()) {
+            this.take(); // discard the escaping backslash
+        }
         if (!split && !rawQuotes && this.testQuotedValue()) {
             // if the next bit is a quoted value, take the whole value and gather contents as a list
             assignment.value = this.parseQuotedValue();
@@ -1187,6 +1191,11 @@ export class SlashCommandParser {
     testQuotedValue() {
         return this.testSymbol('"');
     }
+
+    testEscapedQuote() {
+        return this.testSymbol('\\"', 0, false);
+    }
+
     testQuotedValueEnd() {
         if (this.endOfText) {
             if (this.verifyCommandNames) throw new SlashCommandParserError(`Unexpected end of quoted value at position ${this.index}`, this.text, this.index);
