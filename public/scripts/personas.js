@@ -111,6 +111,7 @@ export function setUserAvatar(imgfile, { toastPersonaNameChange = true, navigate
     reloadUserAvatar();
     updatePersonaUIStates({ navigateToCurrent: navigateToCurrent });
     selectCurrentPersona({ toastPersonaNameChange: toastPersonaNameChange });
+    retriggerFirstMessageOnEmptyChat();
     saveSettingsDebounced();
     $('.zoomed_avatar[forchar]').remove();
 }
@@ -1782,7 +1783,6 @@ function setNameCallback({ mode = 'all' }, name) {
         if (!persona) persona = Object.entries(power_user.personas).find(([_, personaName]) => personaName.toLowerCase() === name.toLowerCase())?.[1];
         if (persona) {
             autoSelectPersona(persona);
-            retriggerFirstMessageOnEmptyChat();
             return '';
         } else if (mode === 'lookup') {
             toastr.warning(`Persona ${name} not found`);
@@ -1793,7 +1793,6 @@ function setNameCallback({ mode = 'all' }, name) {
     if (['temp', 'all'].includes(mode)) {
         // Otherwise, set just the name
         setUserName(name); //this prevented quickReply usage
-        retriggerFirstMessageOnEmptyChat();
     }
 
     return '';
@@ -1944,9 +1943,6 @@ export async function initPersonas() {
     $(document).on('click', '#user_avatar_block .avatar-container', function () {
         const imgfile = $(this).attr('data-avatar-id');
         setUserAvatar(imgfile);
-
-        // force firstMes {{user}} update on persona switch
-        retriggerFirstMessageOnEmptyChat();
     });
 
     $('#persona_rename_button').on('click', () => renamePersona(user_avatar));
