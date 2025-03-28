@@ -36,7 +36,7 @@ export class SlashCommand {
      * @param {string} [props.helpString]
      * @param {boolean} [props.splitUnnamedArgument]
      * @param {Number} [props.splitUnnamedArgumentCount]
-     * @param {boolean} [props.rawQuotes]
+     * @param {boolean} [props.rawQuotes] If set to true, does not remove wrapping quotes from the unnamed argument.
      * @param {string[]} [props.aliases]
      * @param {string} [props.returns]
      * @param {SlashCommandNamedArgument[]} [props.namedArgumentList]
