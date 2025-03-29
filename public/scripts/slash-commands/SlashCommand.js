@@ -1,4 +1,5 @@
 import { hljs } from '../../lib.js';
+import { t } from '../i18n.js';
 import { SlashCommandAbortController } from './SlashCommandAbortController.js';
 import { SlashCommandArgument, SlashCommandNamedArgument } from './SlashCommandArgument.js';
 import { SlashCommandClosure } from './SlashCommandClosure.js';
@@ -259,6 +260,15 @@ export class SlashCommand {
                             this.source,
                         ].filter(it=>it).join('\n');
                         head.append(src);
+                    }
+                    if (this.rawQuotes) {
+                        const rawQuotes = document.createElement('div'); {
+                            rawQuotes.classList.add('rawQuotes');
+                            rawQuotes.classList.add('fa-solid');
+                            rawQuotes.classList.add('fa-quote-left');
+                            rawQuotes.title = t`Does not alter quoted literal unnamed arguments`;
+                            head.append(rawQuotes);
+                        }
                     }
                     specs.append(head);
                 }
