@@ -1,4 +1,6 @@
+import { DOMPurify } from '../lib.js';
 import { callPopup, getRequestHeaders } from '../script.js';
+import { t } from './i18n.js';
 
 export const SECRET_KEYS = {
     HORDE: 'api_key_horde',
@@ -31,6 +33,15 @@ export const SECRET_KEYS = {
     FEATHERLESS: 'api_key_featherless',
     ZEROONEAI: 'api_key_01ai',
     HUGGINGFACE: 'api_key_huggingface',
+    STABILITY: 'api_key_stability',
+    CUSTOM_OPENAI_TTS: 'api_key_custom_openai_tts',
+    NANOGPT: 'api_key_nanogpt',
+    TAVILY: 'api_key_tavily',
+    BFL: 'api_key_bfl',
+    GENERIC: 'api_key_generic',
+    DEEPSEEK: 'api_key_deepseek',
+    SERPER: 'api_key_serper',
+    FALAI: 'api_key_falai',
 };
 
 const INPUT_MAP = {
@@ -62,6 +73,9 @@ const INPUT_MAP = {
     [SECRET_KEYS.FEATHERLESS]: '#api_key_featherless',
     [SECRET_KEYS.ZEROONEAI]: '#api_key_01ai',
     [SECRET_KEYS.HUGGINGFACE]: '#api_key_huggingface',
+    [SECRET_KEYS.NANOGPT]: '#api_key_nanogpt',
+    [SECRET_KEYS.GENERIC]: '#api_key_generic',
+    [SECRET_KEYS.DEEPSEEK]: '#api_key_deepseek',
 };
 
 async function clearSecret() {
@@ -89,7 +103,7 @@ async function viewSecrets() {
     });
 
     if (response.status == 403) {
-        callPopup('<h3>Forbidden</h3><p>To view your API keys here, set the value of allowKeysExposure to true in config.yaml file and restart the SillyTavern server.</p>', 'text');
+        callPopup('<h3>' + t`Forbidden` + '</h3><p>' + t`To view your API keys here, set the value of allowKeysExposure to true in config.yaml file and restart the SillyTavern server.` + '</p>', 'text');
         return;
     }
 
@@ -124,7 +138,7 @@ export async function writeSecret(key, value) {
             const text = await response.text();
 
             if (text == 'ok') {
-                secret_state[key] = true;
+                secret_state[key] = !!value;
                 updateSecretDisplay();
             }
         }
@@ -173,14 +187,17 @@ export async function findSecret(key) {
 }
 
 function authorizeOpenRouter() {
-    const openRouterUrl = `https://openrouter.ai/auth?callback_url=${encodeURIComponent(location.origin)}`;
+    const redirectUrl = new URL('/callback/openrouter', window.location.origin);
+    const openRouterUrl = `https://openrouter.ai/auth?callback_url=${encodeURIComponent(redirectUrl.toString())}`;
     location.href = openRouterUrl;
 }
 
 async function checkOpenRouterAuth() {
     const params = new URLSearchParams(location.search);
-    if (params.has('code')) {
-        const code = params.get('code');
+    const source = params.get('source');
+    if (source === 'openrouter') {
+        const query = new URLSearchParams(params.get('query'));
+        const code = query.get('code');
         try {
             const response = await fetch('https://openrouter.ai/api/v1/auth/keys', {
                 method: 'POST',

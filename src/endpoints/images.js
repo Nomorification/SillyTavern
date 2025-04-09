@@ -1,10 +1,11 @@
-const fs = require('fs');
-const path = require('path');
-const express = require('express');
-const sanitize = require('sanitize-filename');
+import fs from 'node:fs';
+import path from 'node:path';
+import { Buffer } from 'node:buffer';
 
-const { jsonParser } = require('../express-common');
-const { clientRelativePath, removeFileExtension, getImages } = require('../util');
+import express from 'express';
+import sanitize from 'sanitize-filename';
+
+import { clientRelativePath, removeFileExtension, getImages } from '../util.js';
 
 /**
  * Ensure the directory for the provided file path exists.
@@ -21,7 +22,7 @@ function ensureDirectoryExistence(filePath) {
     fs.mkdirSync(dirname);
 }
 
-const router = express.Router();
+export const router = express.Router();
 
 /**
  * Endpoint to handle image uploads.
@@ -34,7 +35,7 @@ const router = express.Router();
  * @param {string} [request.body.ch_name] - Optional character name to determine the sub-directory.
  * @returns {Object} response - The response object containing the path where the image was saved.
  */
-router.post('/upload', jsonParser, async (request, response) => {
+router.post('/upload', async (request, response) => {
     // Check for image data
     if (!request.body || !request.body.image) {
         return response.status(400).send({ error: 'No image data provided' });
@@ -66,23 +67,41 @@ router.post('/upload', jsonParser, async (request, response) => {
 
         ensureDirectoryExistence(pathToNewFile);
         const imageBuffer = Buffer.from(base64Data, 'base64');
-        await fs.promises.writeFile(pathToNewFile, imageBuffer);
+        await fs.promises.writeFile(pathToNewFile, new Uint8Array(imageBuffer));
         response.send({ path: clientRelativePath(request.user.directories.root, pathToNewFile) });
     } catch (error) {
-        console.log(error);
+        console.error(error);
         response.status(500).send({ error: 'Failed to save the image' });
     }
 });
 
-router.post('/list/:folder', (request, response) => {
-    const directoryPath = path.join(request.user.directories.userImages, sanitize(request.params.folder));
-
-    if (!fs.existsSync(directoryPath)) {
-        fs.mkdirSync(directoryPath, { recursive: true });
-    }
-
+router.post('/list/:folder?', (request, response) => {
     try {
-        const images = getImages(directoryPath);
+        if (request.params.folder) {
+            if (request.body.folder) {
+                return response.status(400).send({ error: 'Folder specified in both URL and body' });
+            }
+
+            console.warn('Deprecated: Use POST /api/images/list with folder in request body');
+            request.body.folder = request.params.folder;
+        }
+
+        if (!request.body.folder) {
+            return response.status(400).send({ error: 'No folder specified' });
+        }
+
+        const directoryPath = path.join(request.user.directories.userImages, sanitize(request.body.folder));
+        const sort = request.body.sortField || 'date';
+        const order = request.body.sortOrder || 'asc';
+
+        if (!fs.existsSync(directoryPath)) {
+            fs.mkdirSync(directoryPath, { recursive: true });
+        }
+
+        const images = getImages(directoryPath, sort);
+        if (order === 'desc') {
+            images.reverse();
+        }
         return response.send(images);
     } catch (error) {
         console.error(error);
@@ -90,4 +109,20 @@ router.post('/list/:folder', (request, response) => {
     }
 });
 
-module.exports = { router };
+router.post('/folders', (request, response) => {
+    try {
+        const directoryPath = request.user.directories.userImages;
+        if (!fs.existsSync(directoryPath)) {
+            fs.mkdirSync(directoryPath, { recursive: true });
+        }
+
+        const folders = fs.readdirSync(directoryPath, { withFileTypes: true })
+            .filter(dirent => dirent.isDirectory())
+            .map(dirent => dirent.name);
+
+        return response.send(folders);
+    } catch (error) {
+        console.error(error);
+        return response.status(500).send({ error: 'Unable to retrieve folders' });
+    }
+});

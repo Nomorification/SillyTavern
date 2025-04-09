@@ -8,13 +8,12 @@ import { textgen_types, textgenerationwebui_settings } from '../../textgen-setti
 import { SlashCommandParser } from '../../slash-commands/SlashCommandParser.js';
 import { SlashCommand } from '../../slash-commands/SlashCommand.js';
 import { ARGUMENT_TYPE, SlashCommandArgument, SlashCommandNamedArgument } from '../../slash-commands/SlashCommandArgument.js';
-import { SlashCommandEnumValue } from '../../slash-commands/SlashCommandEnumValue.js';
 import { commonEnumProviders } from '../../slash-commands/SlashCommandCommonEnumsProvider.js';
 export { MODULE_NAME };
 
 const MODULE_NAME = 'caption';
 
-const PROMPT_DEFAULT = 'What’s in this image?';
+const PROMPT_DEFAULT = 'What\'s in this image?';
 const TEMPLATE_DEFAULT = '[{{user}} sends {{char}} a picture that contains: {{caption}}]';
 
 /**
@@ -170,7 +169,11 @@ async function sendCaptionedMessage(caption, image) {
         },
     };
     context.chat.push(message);
+    const messageId = context.chat.length - 1;
+    await eventSource.emit(event_types.MESSAGE_SENT, messageId);
     context.addOneMessage(message);
+    await eventSource.emit(event_types.USER_MESSAGE_RENDERED, messageId);
+    await context.saveChat();
 }
 
 /**
@@ -333,8 +336,9 @@ async function getCaptionForFile(file, prompt, quiet) {
         return caption;
     }
     catch (error) {
-        toastr.error('Failed to caption image.');
-        console.log(error);
+        const errorMessage = error.message || 'Unknown error';
+        toastr.error(errorMessage, 'Failed to caption image.');
+        console.error(error);
         return '';
     }
     finally {
@@ -354,10 +358,10 @@ function onRefineModeInput() {
  */
 async function captionCommandCallback(args, prompt) {
     const quiet = isTrueBoolean(args?.quiet);
-    const id = args?.id;
+    const mesId = args?.mesId ?? args?.id;
 
-    if (!isNaN(Number(id))) {
-        const message = getContext().chat[id];
+    if (!isNaN(Number(mesId))) {
+        const message = getContext().chat[mesId];
         if (message?.extra?.image) {
             try {
                 const fetchResult = await fetch(message.extra.image);
@@ -389,25 +393,67 @@ jQuery(async function () {
         const sendButton = $(`
         <div id="send_picture" class="list-group-item flex-container flexGap5">
             <div class="fa-solid fa-image extensionsMenuExtensionButton"></div>
-            Generate Caption
+            <span data-i18n="Generate Caption">Generate Caption</span>
         </div>`);
 
         $('#caption_wand_container').append(sendButton);
         $(sendButton).on('click', () => {
-            const hasCaptionModule =
-                (modules.includes('caption') && extension_settings.caption.source === 'extras') ||
-                (extension_settings.caption.source === 'multimodal' && extension_settings.caption.multimodal_api === 'openai' && (secret_state[SECRET_KEYS.OPENAI] || extension_settings.caption.allow_reverse_proxy)) ||
-                (extension_settings.caption.source === 'multimodal' && extension_settings.caption.multimodal_api === 'openrouter' && secret_state[SECRET_KEYS.OPENROUTER]) ||
-                (extension_settings.caption.source === 'multimodal' && extension_settings.caption.multimodal_api === 'google' && (secret_state[SECRET_KEYS.MAKERSUITE] || extension_settings.caption.allow_reverse_proxy)) ||
-                (extension_settings.caption.source === 'multimodal' && extension_settings.caption.multimodal_api === 'anthropic' && (secret_state[SECRET_KEYS.CLAUDE] || extension_settings.caption.allow_reverse_proxy)) ||
-                (extension_settings.caption.source === 'multimodal' && extension_settings.caption.multimodal_api === 'ollama' && textgenerationwebui_settings.server_urls[textgen_types.OLLAMA]) ||
-                (extension_settings.caption.source === 'multimodal' && extension_settings.caption.multimodal_api === 'llamacpp' && textgenerationwebui_settings.server_urls[textgen_types.LLAMACPP]) ||
-                (extension_settings.caption.source === 'multimodal' && extension_settings.caption.multimodal_api === 'ooba' && textgenerationwebui_settings.server_urls[textgen_types.OOBA]) ||
-                (extension_settings.caption.source === 'multimodal' && extension_settings.caption.multimodal_api === 'koboldcpp' && textgenerationwebui_settings.server_urls[textgen_types.KOBOLDCPP]) ||
-                (extension_settings.caption.source === 'multimodal' && extension_settings.caption.multimodal_api === 'vllm' && textgenerationwebui_settings.server_urls[textgen_types.VLLM]) ||
-                (extension_settings.caption.source === 'multimodal' && extension_settings.caption.multimodal_api === 'custom') ||
-                extension_settings.caption.source === 'local' ||
-                extension_settings.caption.source === 'horde';
+            const hasCaptionModule = (() => {
+                const settings = extension_settings.caption;
+
+                // Handle non-multimodal sources
+                if (settings.source === 'extras' && modules.includes('caption')) return true;
+                if (settings.source === 'local' || settings.source === 'horde') return true;
+
+                // Handle multimodal sources
+                if (settings.source === 'multimodal') {
+                    const api = settings.multimodal_api;
+
+                    // APIs that support reverse proxy
+                    const reverseProxyApis = {
+                        'openai': SECRET_KEYS.OPENAI,
+                        'mistral': SECRET_KEYS.MISTRALAI,
+                        'google': SECRET_KEYS.MAKERSUITE,
+                        'anthropic': SECRET_KEYS.CLAUDE,
+                    };
+
+                    if (reverseProxyApis[api]) {
+                        if (secret_state[reverseProxyApis[api]] || settings.allow_reverse_proxy) {
+                            return true;
+                        }
+                    }
+
+                    const chatCompletionApis = {
+                        'openrouter': SECRET_KEYS.OPENROUTER,
+                        'zerooneai': SECRET_KEYS.ZEROONEAI,
+                        'groq': SECRET_KEYS.GROQ,
+                        'cohere': SECRET_KEYS.COHERE,
+                    };
+
+                    if (chatCompletionApis[api] && secret_state[chatCompletionApis[api]]) {
+                        return true;
+                    }
+
+                    const textCompletionApis = {
+                        'ollama': textgen_types.OLLAMA,
+                        'llamacpp': textgen_types.LLAMACPP,
+                        'ooba': textgen_types.OOBA,
+                        'koboldcpp': textgen_types.KOBOLDCPP,
+                        'vllm': textgen_types.VLLM,
+                    };
+
+                    if (textCompletionApis[api] && textgenerationwebui_settings.server_urls[textCompletionApis[api]]) {
+                        return true;
+                    }
+
+                    // Custom API doesn't need additional checks
+                    if (api === 'custom') {
+                        return true;
+                    }
+                }
+
+                return false;
+            })();
 
             if (!hasCaptionModule) {
                 toastr.error('Choose other captioning source in the extension settings.', 'Captioning is not available');
@@ -426,14 +472,9 @@ jQuery(async function () {
         $('#form_sheld').append(imgForm);
         $('#img_file').on('change', (e) => onSelectImage(e.originalEvent, '', false));
     }
-    function switchMultimodalBlocks() {
+    async function switchMultimodalBlocks() {
+        await addOpenRouterModels();
         const isMultimodal = extension_settings.caption.source === 'multimodal';
-        $('#caption_ollama_pull').on('click', (e) => {
-            const presetModel = extension_settings.caption.multimodal_model !== 'ollama_current' ? extension_settings.caption.multimodal_model : '';
-            e.preventDefault();
-            $('#ollama_download_model').trigger('click');
-            $('#dialogue_popup_input').val(presetModel);
-        });
         $('#caption_multimodal_block').toggle(isMultimodal);
         $('#caption_prompt_block').toggle(isMultimodal);
         $('#caption_multimodal_api').val(extension_settings.caption.multimodal_api);
@@ -443,22 +484,40 @@ jQuery(async function () {
             const types = type.split(',');
             $(this).toggle(types.includes(extension_settings.caption.multimodal_api));
         });
-        $('#caption_multimodal_api').on('change', () => {
-            const api = String($('#caption_multimodal_api').val());
-            const model = String($(`#caption_multimodal_model option[data-type="${api}"]`).first().val());
-            extension_settings.caption.multimodal_api = api;
-            extension_settings.caption.multimodal_model = model;
-            saveSettingsDebounced();
-            switchMultimodalBlocks();
-        });
-        $('#caption_multimodal_model').on('change', () => {
-            extension_settings.caption.multimodal_model = String($('#caption_multimodal_model').val());
-            saveSettingsDebounced();
-        });
     }
     async function addSettings() {
         const html = await renderExtensionTemplateAsync('caption', 'settings', { TEMPLATE_DEFAULT, PROMPT_DEFAULT });
         $('#caption_container').append(html);
+    }
+    async function addOpenRouterModels() {
+        const dropdown = document.getElementById('caption_multimodal_model');
+        if (!(dropdown instanceof HTMLSelectElement)) {
+            return;
+        }
+        if (extension_settings.caption.source !== 'multimodal' || extension_settings.caption.multimodal_api !== 'openrouter') {
+            return;
+        }
+        const options = Array.from(dropdown.options);
+        const response = await fetch('/api/openrouter/models/multimodal', {
+            method: 'POST',
+            headers: getRequestHeaders(),
+        });
+        if (!response.ok) {
+            return;
+        }
+        const modelIds = await response.json();
+        if (Array.isArray(modelIds) && modelIds.length > 0) {
+            modelIds.forEach((modelId) => {
+                if (!modelId || typeof modelId !== 'string' || options.some(o => o.value === modelId)) {
+                    return;
+                }
+                const option = document.createElement('option');
+                option.value = modelId;
+                option.textContent = modelId;
+                option.dataset.type = 'openrouter';
+                dropdown.add(option);
+            });
+        }
     }
 
     await addSettings();
@@ -466,7 +525,7 @@ jQuery(async function () {
     addSendPictureButton();
     setImageIcon();
     migrateSettings();
-    switchMultimodalBlocks();
+    await switchMultimodalBlocks();
 
     $('#caption_refine_mode').prop('checked', !!(extension_settings.caption.refine_mode));
     $('#caption_allow_reverse_proxy').prop('checked', !!(extension_settings.caption.allow_reverse_proxy));
@@ -501,6 +560,24 @@ jQuery(async function () {
         extension_settings.caption.auto_mode = !!$('#caption_auto_mode').prop('checked');
         saveSettingsDebounced();
     });
+    $('#caption_ollama_pull').on('click', (e) => {
+        const presetModel = extension_settings.caption.multimodal_model !== 'ollama_current' ? extension_settings.caption.multimodal_model : '';
+        e.preventDefault();
+        $('#ollama_download_model').trigger('click');
+        $('#dialogue_popup_input').val(presetModel);
+    });
+    $('#caption_multimodal_api').on('change', () => {
+        const api = String($('#caption_multimodal_api').val());
+        const model = String($(`#caption_multimodal_model option[data-type="${api}"]`).first().val());
+        extension_settings.caption.multimodal_api = api;
+        extension_settings.caption.multimodal_model = model;
+        saveSettingsDebounced();
+        switchMultimodalBlocks();
+    });
+    $('#caption_multimodal_model').on('change', () => {
+        extension_settings.caption.multimodal_model = String($('#caption_multimodal_model').val());
+        saveSettingsDebounced();
+    });
 
     const onMessageEvent = async (index) => {
         if (!extension_settings.caption.auto_mode) {
@@ -526,14 +603,15 @@ jQuery(async function () {
             await captionExistingMessage(data);
             appendMediaToMessage(data, messageBlock, false);
             await saveChatConditional();
-        } catch(e) {
+        } catch (e) {
             console.error('Message image recaption failed', e);
         } finally {
             messageImg.removeClass(animationClass);
         }
     });
 
-    SlashCommandParser.addCommandObject(SlashCommand.fromProps({ name: 'caption',
+    SlashCommandParser.addCommandObject(SlashCommand.fromProps({
+        name: 'caption',
         callback: captionCommandCallback,
         returns: 'caption',
         namedArgumentList: [
@@ -541,7 +619,7 @@ jQuery(async function () {
                 'quiet', 'suppress sending a captioned message', [ARGUMENT_TYPE.BOOLEAN], false, false, 'false',
             ),
             SlashCommandNamedArgument.fromProps({
-                name: 'id',
+                name: 'mesId',
                 description: 'get image from a message with this ID',
                 typeList: [ARGUMENT_TYPE.NUMBER],
                 enumProvider: commonEnumProviders.messages(),

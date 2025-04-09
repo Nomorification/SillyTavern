@@ -1,3 +1,5 @@
+import { DOMPurify } from '../lib.js';
+
 import {
     characters,
     saveSettingsDebounced,
@@ -9,14 +11,12 @@ import {
     eventSource,
     event_types,
     DEFAULT_PRINT_TIMEOUT,
-    substituteParams,
     printCharacters,
 } from '../script.js';
-// eslint-disable-next-line no-unused-vars
 import { FILTER_TYPES, FILTER_STATES, DEFAULT_FILTER_STATE, isFilterState, FilterHelper } from './filters.js';
 
-import { groupCandidatesFilter, groups, select_group_chats, selected_group } from './group-chats.js';
-import { download, onlyUnique, parseJsonFile, uuidv4, getSortableDelay, flashHighlight, equalsIgnoreCaseAndAccents, includesIgnoreCaseAndAccents, removeFromArray, getFreeName, debounce } from './utils.js';
+import { groupCandidatesFilter, groups, selected_group } from './group-chats.js';
+import { download, onlyUnique, parseJsonFile, uuidv4, getSortableDelay, flashHighlight, equalsIgnoreCaseAndAccents, includesIgnoreCaseAndAccents, removeFromArray, getFreeName, debounce, findChar } from './utils.js';
 import { power_user } from './power-user.js';
 import { SlashCommandParser } from './slash-commands/SlashCommandParser.js';
 import { SlashCommand } from './slash-commands/SlashCommand.js';
@@ -25,10 +25,9 @@ import { isMobile } from './RossAscends-mods.js';
 import { POPUP_RESULT, POPUP_TYPE, Popup, callGenericPopup } from './popup.js';
 import { debounce_timeout } from './constants.js';
 import { INTERACTABLE_CONTROL_CLASS } from './keyboard.js';
-import { SlashCommandEnumValue } from './slash-commands/SlashCommandEnumValue.js';
-import { SlashCommandExecutor } from './slash-commands/SlashCommandExecutor.js';
 import { commonEnumProviders } from './slash-commands/SlashCommandCommonEnumsProvider.js';
 import { renderTemplateAsync } from './templates.js';
+import { t } from './i18n.js';
 
 export {
     TAG_FOLDER_TYPES,
@@ -196,9 +195,10 @@ function filterByTagState(entities, { globalDisplayFilters = false, subForEntity
                 return false;
             }
 
-            // Hide folders that have 0 visible sub entities after the first filtering round
+            // Hide folders that have 0 visible sub entities after the first filtering round, unless we are inside a search via search term.
+            // Then we want to display folders that mach too, even if the chars inside don't match the search.
             if (entity.type === 'tag') {
-                return entity.entities.length > 0;
+                return entity.entities.length > 0 || entitiesFilter.getFilterData(FILTER_TYPES.SEARCH);
             }
 
             return true;
@@ -409,7 +409,7 @@ function getInlineListSelector() {
         return `.group_select[grid="${selected_group}"] .tags`;
     }
 
-    if (this_chid && menu_type === 'character_edit') {
+    if (this_chid !== undefined && menu_type === 'character_edit') {
         return `.character_select[chid="${this_chid}"] .tags`;
     }
 
@@ -447,7 +447,11 @@ export function getTagKeyForEntity(entityOrKey) {
     }
 
     // Next lets check if its a valid character or character id, so we can swith it to its tag
-    const character = characters.indexOf(x) >= 0 ? x : characters[x];
+    let character;
+    if (!character && characters.indexOf(x) >= 0) character = x; // Check for char object
+    if (!character && !isNaN(parseInt(entityOrKey))) character = characters[x]; // check if its a char id
+    if (!character) character = characters.find(y => y.avatar === x); // check if its a char key
+
     if (character) {
         x = character.avatar;
     }
@@ -480,8 +484,8 @@ export function getTagKeyForEntityElement(element) {
     }
     // Start with the given element and traverse up the DOM tree
     while (element.length && element.parent().length) {
-        const grid = element.attr('grid');
-        const chid = element.attr('chid');
+        const grid = element.attr('data-grid');
+        const chid = element.attr('data-chid');
         if (grid || chid) {
             const id = grid || chid;
             return getTagKeyForEntity(id);
@@ -505,7 +509,7 @@ export function getTagKeyForEntityElement(element) {
  */
 export function searchCharByName(charName, { suppressLogging = false } = {}) {
     const entity = charName
-        ? (characters.find(x => x.name === charName) || groups.find(x => x.name == charName))
+        ? (findChar({ name: charName }) || groups.find(x => equalsIgnoreCaseAndAccents(x.name, charName)))
         : (selected_group ? groups.find(x => x.id == selected_group) : characters[this_chid]);
     const key = getTagKeyForEntity(entity);
     if (!key) {
@@ -710,21 +714,25 @@ const ANTI_TROLL_MAX_TAGS = 15;
  *
  * @param {Character} character - The character
  * @param {object} [options] - Options
- * @param {boolean} [options.forceShow=false] - Whether to force showing the import dialog
+ * @param {tag_import_setting} [options.importSetting=null] - Force a tag import setting
  * @returns {Promise<boolean>} Boolean indicating whether any tag was imported
  */
-async function importTags(character, { forceShow = false } = {}) {
+async function importTags(character, { importSetting = null } = {}) {
     // Gather the tags to import based on the selected setting
-    const tagNamesToImport = await handleTagImport(character, { forceShow });
+    const tagNamesToImport = await handleTagImport(character, { importSetting });
     if (!tagNamesToImport?.length) {
-        toastr.info('No tags to import', 'Importing Tags');
+        console.debug('No tags to import');
         return;
     }
 
     const tagsToImport = tagNamesToImport.map(tag => getTag(tag, { createNew: true }));
     const added = addTagsToEntity(tagsToImport, character.avatar);
 
-    toastr.success(`Imported tags:<br />${tagsToImport.map(x => x.name).join(', ')}`, 'Importing Tags', { escapeHtml: false });
+    if (added) {
+        toastr.success(t`Imported tags:` + `<br />${tagsToImport.map(x => x.name).join(', ')}`, t`Importing Tags`, { escapeHtml: false });
+    } else {
+        toastr.error(t`Couldn't import tags:` + `<br />${tagsToImport.map(x => x.name).join(', ')}`, t`Importing Tags`, { escapeHtml: false });
+    }
 
     return added;
 }
@@ -734,10 +742,10 @@ async function importTags(character, { forceShow = false } = {}) {
  *
  * @param {Character} character - The character
  * @param {object} [options] - Options
- * @param {boolean} [options.forceShow=false] - Whether to force showing the import dialog
+ * @param {tag_import_setting} [options.importSetting=null] - Force a tag import setting
  * @returns {Promise<string[]>} Array of strings representing the tags to import
  */
-async function handleTagImport(character, { forceShow = false } = {}) {
+async function handleTagImport(character, { importSetting = null } = {}) {
     /** @type {string[]} */
     const importTags = character.tags.map(t => t.trim()).filter(t => t)
         .filter(t => !IMPORT_EXLCUDED_TAGS.includes(t))
@@ -747,9 +755,9 @@ async function handleTagImport(character, { forceShow = false } = {}) {
         .map(newTag);
     const folderTags = getOpenBogusFolders();
 
-    // Choose the setting for this dialog. If from settings, verify the setting really exists, otherwise take "ASK".
-    const setting = forceShow ? tag_import_setting.ASK
-        : Object.values(tag_import_setting).find(setting => setting === power_user.tag_import_setting) ?? tag_import_setting.ASK;
+    // Choose the setting for this dialog. First check override, then saved setting or finally use "ASK".
+    const setting = importSetting ? importSetting :
+        Object.values(tag_import_setting).find(setting => setting === power_user.tag_import_setting) ?? tag_import_setting.ASK;
 
     switch (setting) {
         case tag_import_setting.ALL:
@@ -815,7 +823,7 @@ async function showTagImportPopup(character, existingTags, newTags, folderTags) 
         wider: true, okButton: 'Import', cancelButton: true,
         customButtons: Object.values(importButtons),
         customInputs: [{ id: 'import_remember_option', label: 'Remember my choice', tooltip: 'Remember the chosen import option\nIf anything besides \'Cancel\' is selected, this dialog will not show up anymore.\nTo change this, go to the settings and modify "Tag Import Option".\n\nIf the "Import" option is chosen, the global setting will stay on "Ask".' }],
-        onClose: onCloseRemember
+        onClose: onCloseRemember,
     });
     if (!result) {
         return [];
@@ -1242,7 +1250,7 @@ function onCharacterCreateClick() {
 }
 
 function onGroupCreateClick() {
-    // Nothing to do here at the moment. Tags in group interface get automatically redrawn.
+    $('#groupTagList').empty();
 }
 
 export function applyTagsOnCharacterSelect(chid = null) {
@@ -1250,11 +1258,11 @@ export function applyTagsOnCharacterSelect(chid = null) {
     if (menu_type === 'create') {
         const currentTagIds = $('#tagList').find('.tag').map((_, el) => $(el).attr('id')).get();
         const currentTags = tags.filter(x => currentTagIds.includes(x.id));
-        printTagList($('#tagList'), { forEntityOrKey: null, tags: currentTags, tagOptions: { removable: true } });
+        printTagList($('#tagList'), { forEntityOrKey: undefined, tags: currentTags, tagOptions: { removable: true } });
         return;
     }
 
-    chid = chid ?? Number(this_chid);
+    chid = chid ?? (this_chid !== undefined ? Number(this_chid) : undefined);
     printTagList($('#tagList'), { forEntityOrKey: chid, tagOptions: { removable: true } });
 }
 
@@ -1263,11 +1271,11 @@ export function applyTagsOnGroupSelect(groupId = null) {
     if (menu_type === 'group_create') {
         const currentTagIds = $('#groupTagList').find('.tag').map((_, el) => $(el).attr('id')).get();
         const currentTags = tags.filter(x => currentTagIds.includes(x.id));
-        printTagList($('#groupTagList'), { forEntityOrKey: null, tags: currentTags, tagOptions: { removable: true } });
+        printTagList($('#groupTagList'), { forEntityOrKey: undefined, tags: currentTags, tagOptions: { removable: true } });
         return;
     }
 
-    groupId = groupId ?? Number(selected_group);
+    groupId = groupId ?? (selected_group ? Number(selected_group) : undefined);
     printTagList($('#groupTagList'), { forEntityOrKey: groupId, tagOptions: { removable: true } });
 }
 
@@ -1292,40 +1300,7 @@ export function createTagInput(inputSelector, listSelector, tagListOptions = {})
 async function onViewTagsListClick() {
     const html = $(document.createElement('div'));
     html.attr('id', 'tag_view_list');
-    html.append(`
-    <div class="title_restorable alignItemsBaseline">
-        <h3>Tag Management</h3>
-        <div class="flex-container alignItemsBaseline">
-            <div class="menu_button menu_button_icon tag_view_backup" title="Save your tags to a file">
-                <i class="fa-solid fa-file-export"></i>
-                <span data-i18n="Backup">Backup</span>
-            </div>
-            <div class="menu_button menu_button_icon tag_view_restore" title="Restore tags from a file">
-                <i class="fa-solid fa-file-import"></i>
-                <span data-i18n="Restore">Restore</span>
-            </div>
-            <div class="menu_button menu_button_icon tag_view_create" title="Create a new tag">
-                <i class="fa-solid fa-plus"></i>
-                <span data-i18n="Create">Create</span>
-            </div>
-            <input type="file" id="tag_view_restore_input" hidden accept=".json">
-        </div>
-    </div>
-    <div class="justifyLeft m-b-1">
-        <small>
-            Drag handle to reorder. Click name to rename. Click color to change display.<br>
-            ${(power_user.bogus_folders ? 'Click on the folder icon to use this tag as a folder.<br>' : '')}
-            <label class="checkbox flex-container alignitemscenter flexNoGap m-t-1" for="auto_sort_tags">
-                <input type="checkbox" id="auto_sort_tags" name="auto_sort_tags" ${power_user.auto_sort_tags ? ' checked' : ''} />
-                <span data-i18n="Use alphabetical sorting">
-                    Use alphabetical sorting
-                    <div class="fa-solid fa-circle-info opacity50p" data-i18n="[title]If enabled, tags will automatically be sorted alphabetically on creation or rename.\nIf disabled, new tags will be appended at the end.\n\nIf a tag is manually reordered by dragging, automatic sorting will be disabled."
-                        title="If enabled, tags will automatically be sorted alphabetically on creation or rename.\nIf disabled, new tags will be appended at the end.\n\nIf a tag is manually reordered by dragging, automatic sorting will be disabled.">
-                    </div>
-                </span>
-            </label>
-        </small>
-    </div>`);
+    html.append(await renderTemplateAsync('tagManagement', { bogus_folders: power_user.bogus_folders, auto_sort_tags: power_user.auto_sort_tags }));
 
     const tagContainer = $('<div class="tag_view_list_tags ui-sortable"></div>');
     html.append(tagContainer);
@@ -1369,27 +1344,8 @@ function makeTagListDraggable(tagContainer) {
             const id = $(tagElement).attr('id');
             const tag = tags.find(x => x.id === id);
 
-            // Fix the defined colors, because if there is no color set, they seem to get automatically set to black
-            // based on the color picker after drag&drop, even if there was no color chosen. We just set them back.
-            const color = $(tagElement).find('.tagColorPickerHolder .tag-color').attr('color');
-            const color2 = $(tagElement).find('.tagColorPicker2Holder .tag-color2').attr('color');
-            if (color === '' || color === undefined) {
-                tag.color = '';
-                fixColor('background-color', tag.color);
-            }
-            if (color2 === '' || color2 === undefined) {
-                tag.color2 = '';
-                fixColor('color', tag.color2);
-            }
-
             // Update the sort order
             tag.sort_order = i;
-
-            function fixColor(property, color) {
-                $(tagElement).find('.tag_view_name').css(property, color);
-                $(`.tag[id="${id}"]`).css(property, color);
-                $(`.bogus_folder_select[tagid="${id}"] .avatar`).css(property, color);
-            }
         });
 
         // If tags were dragged manually, we have to disable auto sorting
@@ -1457,18 +1413,28 @@ async function onTagRestoreFileSelect(e) {
     const data = await parseJsonFile(file);
 
     if (!data) {
-        toastr.warning('Empty file data', 'Tag restore');
+        toastr.warning('Empty file data', 'Tag Restore');
         console.log('Tag restore: File data empty.');
         return;
     }
 
     if (!data.tags || !data.tag_map || !Array.isArray(data.tags) || typeof data.tag_map !== 'object') {
-        toastr.warning('Invalid file format', 'Tag restore');
+        toastr.warning('Invalid file format', 'Tag Restore');
         console.log('Tag restore: Invalid file format.');
         return;
     }
 
+    // Prompt user if they want to overwrite existing tags
+    let overwrite = false;
+    if (tags.length > 0) {
+        const result = await Popup.show.confirm('Tag Restore', 'You have existing tags. If the backup contains any of those tags, do you want the backup to overwrite their settings (Name, color, folder state, etc)?',
+            { okButton: 'Overwrite', cancelButton: 'Keep Existing' });
+        overwrite = result === POPUP_RESULT.AFFIRMATIVE;
+    }
+
     const warnings = [];
+    /** @type {Map<string, string>} Map import tag ids with existing ids on overwrite */
+    const idToActualTagIdMap = new Map();
 
     // Import tags
     for (const tag of data.tags) {
@@ -1477,9 +1443,27 @@ async function onTagRestoreFileSelect(e) {
             continue;
         }
 
-        if (tags.find(x => x.id === tag.id)) {
-            warnings.push(`Tag with id ${tag.id} already exists.`);
+        // Check against both existing id (direct match) and tag with the same name, which is not allowed.
+        let existingTag = tags.find(x => x.id === tag.id);
+        if (existingTag && !overwrite) {
+            warnings.push(`Tag '${tag.name}' with id ${tag.id} already exists.`);
             continue;
+        }
+        existingTag = getTag(tag.name);
+        if (existingTag && !overwrite) {
+            warnings.push(`Tag with name '${tag.name}' already exists.`);
+            // Remember the tag id, so we can still import the tag map entries for this
+            idToActualTagIdMap.set(tag.id, existingTag.id);
+            continue;
+        }
+
+        if (existingTag) {
+            // On overwrite, we remove and re-add the tag
+            removeFromArray(tags, existingTag);
+            // And remember the ID if it was different, so we can update the tag map accordingly
+            if (existingTag.id !== tag.id) {
+                idToActualTagIdMap.set(existingTag.id, tag.id);
+            }
         }
 
         tags.push(tag);
@@ -1499,30 +1483,39 @@ async function onTagRestoreFileSelect(e) {
         const groupExists = groups.some(x => String(x.id) === String(key));
 
         if (!characterExists && !groupExists) {
-            warnings.push(`Tag map key ${key} does not exist.`);
+            warnings.push(`Tag map key ${key} does not exist as character or group.`);
             continue;
         }
 
         // Get existing tag ids for this key or empty array.
         const existingTagIds = tag_map[key] || [];
-        // Merge existing and new tag ids. Remove duplicates.
-        tag_map[key] = existingTagIds.concat(tagIds).filter(onlyUnique);
+
+        // Merge existing and new tag ids. Replace the ones mapped to a new id. Remove duplicates.
+        const combinedTags = existingTagIds.concat(tagIds)
+            .map(tagId => (idToActualTagIdMap.has(tagId)) ? idToActualTagIdMap.get(tagId) : tagId)
+            .filter(onlyUnique);
+
         // Verify that all tags exist. Remove tags that don't exist.
-        tag_map[key] = tag_map[key].filter(x => tags.some(y => String(y.id) === String(x)));
+        tag_map[key] = combinedTags.filter(tagId => tags.some(y => String(y.id) === String(tagId)));
     }
 
     if (warnings.length) {
-        toastr.success('Tags restored with warnings. Check console for details.');
+        toastr.warning('Tags restored with warnings. Check console or click on this message for details.', 'Tag Restore', {
+            timeOut: toastr.options.timeOut * 2, // Display double the time
+            onclick: () => Popup.show.text('Tag Restore Warnings', `<samp class="justifyLeft">${DOMPurify.sanitize(warnings.join('\n'))}<samp>`, { allowVerticalScrolling: true }),
+        });
         console.warn(`TAG RESTORE REPORT\n====================\n${warnings.join('\n')}`);
     } else {
-        toastr.success('Tags restored successfully.');
+        toastr.success('Tags restored successfully.', 'Tag Restore');
     }
 
     $('#tag_view_restore_input').val('');
     printCharactersDebounced();
     saveSettingsDebounced();
 
-    await onViewTagsListClick();
+    // Reprint the tag management popup, without having it to be opened again
+    const tagContainer = $('#tag_view_list .tag_view_list_tags');
+    printViewTagList(tagContainer);
 }
 
 function onBackupRestoreClick() {
@@ -1579,7 +1572,7 @@ function appendViewTagToList(list, tag, everything) {
 
     const primaryColorPicker = $('<toolcool-color-picker></toolcool-color-picker>')
         .addClass('tag-color')
-        .attr({ id: colorPickerId, color: tag.color || 'rgba(0, 0, 0, 0.3)', 'data-default-color': 'rgba(0, 0, 0, 0.3)' });
+        .attr({ id: colorPickerId, color: tag.color || 'rgba(0, 0, 0, 0.5)', 'data-default-color': 'rgba(0, 0, 0, 0.5)' });
 
     const secondaryColorPicker = $('<toolcool-color-picker></toolcool-color-picker>')
         .addClass('tag-color2')
@@ -1837,8 +1830,9 @@ function registerTagsSlashCommands() {
             return String(result);
         },
         namedArgumentList: [
-            SlashCommandNamedArgument.fromProps({ name: 'name',
-                description: 'Character name',
+            SlashCommandNamedArgument.fromProps({
+                name: 'name',
+                description: 'Character name - or unique character identifier (avatar key)',
                 typeList: [ARGUMENT_TYPE.STRING],
                 defaultValue: '{{char}}',
                 enumProvider: commonEnumProviders.characters(),
@@ -1883,7 +1877,7 @@ function registerTagsSlashCommands() {
         },
         namedArgumentList: [
             SlashCommandNamedArgument.fromProps({ name: 'name',
-                description: 'Character name',
+                description: 'Character name - or unique character identifier (avatar key)',
                 typeList: [ARGUMENT_TYPE.STRING],
                 defaultValue: '{{char}}',
                 enumProvider: commonEnumProviders.characters(),
@@ -1926,7 +1920,7 @@ function registerTagsSlashCommands() {
         namedArgumentList: [
             SlashCommandNamedArgument.fromProps({
                 name: 'name',
-                description: 'Character name',
+                description: 'Character name - or unique character identifier (avatar key)',
                 typeList: [ARGUMENT_TYPE.STRING],
                 defaultValue: '{{char}}',
                 enumProvider: commonEnumProviders.characters(),
@@ -1969,7 +1963,7 @@ function registerTagsSlashCommands() {
         namedArgumentList: [
             SlashCommandNamedArgument.fromProps({
                 name: 'name',
-                description: 'Character name',
+                description: 'Character name - or unique character identifier (avatar key)',
                 typeList: [ARGUMENT_TYPE.STRING],
                 defaultValue: '{{char}}',
                 enumProvider: commonEnumProviders.characters(),

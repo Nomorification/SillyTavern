@@ -360,6 +360,10 @@
     margin-right: 2px;
 }
 
+.flexAuto {
+    flex: auto;
+}
+
 .flex0 {
     flex: 0;
 }
@@ -475,11 +479,6 @@
     line-height: 1.2;
 }
 
-.custom-katex-html,
-.katex-html {
-    display: none;
-}
-
 .hoverglow {
     transition: opacity 200ms;
 }
@@ -492,6 +491,10 @@
 input:disabled,
 textarea:disabled {
     cursor: not-allowed;
+    filter: brightness(0.5);
+}
+
+#AdvancedFormatting .disabled {
     filter: brightness(0.5);
 }
 
@@ -603,4 +606,8 @@ ul.li-padding-bot5 li {
 
 ul.li-padding-bot10 li {
     padding-bottom: 10px;
+}
+
+.wordBreakAll {
+    word-break: break-all;
 }

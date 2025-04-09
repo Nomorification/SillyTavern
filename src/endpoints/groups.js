@@ -1,15 +1,15 @@
-const fs = require('fs');
-const path = require('path');
-const express = require('express');
-const sanitize = require('sanitize-filename');
-const writeFileAtomicSync = require('write-file-atomic').sync;
+import fs from 'node:fs';
+import path from 'node:path';
 
-const { jsonParser } = require('../express-common');
-const { humanizedISO8601DateTime } = require('../util');
+import express from 'express';
+import sanitize from 'sanitize-filename';
+import { sync as writeFileAtomicSync } from 'write-file-atomic';
 
-const router = express.Router();
+import { humanizedISO8601DateTime } from '../util.js';
 
-router.post('/all', jsonParser, (request, response) => {
+export const router = express.Router();
+
+router.post('/all', (request, response) => {
     const groups = [];
 
     if (!fs.existsSync(request.user.directories.groups)) {
@@ -53,7 +53,7 @@ router.post('/all', jsonParser, (request, response) => {
     return response.send(groups);
 });
 
-router.post('/create', jsonParser, (request, response) => {
+router.post('/create', (request, response) => {
     if (!request.body) {
         return response.sendStatus(400);
     }
@@ -87,7 +87,7 @@ router.post('/create', jsonParser, (request, response) => {
     return response.send(groupMetadata);
 });
 
-router.post('/edit', jsonParser, (request, response) => {
+router.post('/edit', (request, response) => {
     if (!request.body || !request.body.id) {
         return response.sendStatus(400);
     }
@@ -99,7 +99,7 @@ router.post('/edit', jsonParser, (request, response) => {
     return response.send({ ok: true });
 });
 
-router.post('/delete', jsonParser, async (request, response) => {
+router.post('/delete', async (request, response) => {
     if (!request.body || !request.body.id) {
         return response.sendStatus(400);
     }
@@ -113,7 +113,7 @@ router.post('/delete', jsonParser, async (request, response) => {
 
         if (group && Array.isArray(group.chats)) {
             for (const chat of group.chats) {
-                console.log('Deleting group chat', chat);
+                console.info('Deleting group chat', chat);
                 const pathToFile = path.join(request.user.directories.groupChats, `${id}.jsonl`);
 
                 if (fs.existsSync(pathToFile)) {
@@ -131,5 +131,3 @@ router.post('/delete', jsonParser, async (request, response) => {
 
     return response.send({ ok: true });
 });
-
-module.exports = { router };

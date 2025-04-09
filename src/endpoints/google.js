@@ -1,14 +1,16 @@
-const { readSecret, SECRET_KEYS } = require('./secrets');
-const fetch = require('node-fetch').default;
-const express = require('express');
-const { jsonParser } = require('../express-common');
-const { GEMINI_SAFETY } = require('../constants');
+import { Buffer } from 'node:buffer';
+import fetch from 'node-fetch';
+import express from 'express';
+import { speak, languages } from 'google-translate-api-x';
+
+import { readSecret, SECRET_KEYS } from './secrets.js';
+import { GEMINI_SAFETY } from '../constants.js';
 
 const API_MAKERSUITE = 'https://generativelanguage.googleapis.com';
 
-const router = express.Router();
+export const router = express.Router();
 
-router.post('/caption-image', jsonParser, async (request, response) => {
+router.post('/caption-image', async (request, response) => {
     try {
         const mimeType = request.body.image.split(';')[0].split(':')[1];
         const base64Data = request.body.image.split(',')[1];
@@ -22,8 +24,8 @@ router.post('/caption-image', jsonParser, async (request, response) => {
                     { text: request.body.prompt },
                     {
                         inlineData: {
-                            mimeType: 'image/png', // It needs to specify a MIME type in data if it's not a PNG
-                            data: mimeType === 'image/png' ? base64Data : request.body.image,
+                            mimeType: mimeType,
+                            data: base64Data,
                         },
                     }],
             }],
@@ -31,7 +33,7 @@ router.post('/caption-image', jsonParser, async (request, response) => {
             generationConfig: { maxOutputTokens: 1000 },
         };
 
-        console.log('Multimodal captioning request', model, body);
+        console.debug('Multimodal captioning request', model, body);
 
         const result = await fetch(url, {
             body: JSON.stringify(body),
@@ -39,17 +41,17 @@ router.post('/caption-image', jsonParser, async (request, response) => {
             headers: {
                 'Content-Type': 'application/json',
             },
-            timeout: 0,
         });
 
         if (!result.ok) {
             const error = await result.json();
-            console.log(`MakerSuite API returned error: ${result.status} ${result.statusText}`, error);
+            console.error(`Google AI Studio API returned error: ${result.status} ${result.statusText}`, error);
             return response.status(result.status).send({ error: true });
         }
 
+        /** @type {any} */
         const data = await result.json();
-        console.log('Multimodal captioning response', data);
+        console.info('Multimodal captioning response', data);
 
         const candidates = data?.candidates;
         if (!candidates) {
@@ -68,4 +70,24 @@ router.post('/caption-image', jsonParser, async (request, response) => {
     }
 });
 
-module.exports = { router };
+router.post('/list-voices', (_, response) => {
+    return response.json(languages);
+});
+
+router.post('/generate-voice', async (request, response) => {
+    try {
+        const text = request.body.text;
+        const voice = request.body.voice ?? 'en';
+
+        const result = await speak(text, { to: voice, forceBatch: false });
+        const buffer = Array.isArray(result)
+            ? Buffer.concat(result.map(x => new Uint8Array(Buffer.from(x.toString(), 'base64'))))
+            : Buffer.from(result.toString(), 'base64');
+
+        response.setHeader('Content-Type', 'audio/mpeg');
+        return response.send(buffer);
+    } catch (error) {
+        console.error('Google Translate TTS generation failed', error);
+        response.status(500).send('Internal server error');
+    }
+});

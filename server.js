@@ -1,50 +1,83 @@
 #!/usr/bin/env node
 
 // native node modules
-const fs = require('fs');
-const http = require('http');
-const https = require('https');
-const path = require('path');
-const util = require('util');
+import path from 'node:path';
+import util from 'node:util';
+import net from 'node:net';
+import dns from 'node:dns';
+import process from 'node:process';
+import { fileURLToPath } from 'node:url';
 
-// cli/fs related library imports
-const open = require('open');
-const yargs = require('yargs/yargs');
-const { hideBin } = require('yargs/helpers');
+import cors from 'cors';
+import { csrfSync } from 'csrf-sync';
+import express from 'express';
+import compression from 'compression';
+import cookieSession from 'cookie-session';
+import multer from 'multer';
+import responseTime from 'response-time';
+import helmet from 'helmet';
+import bodyParser from 'body-parser';
+import open from 'open';
 
-// express/server related library imports
-const cors = require('cors');
-const doubleCsrf = require('csrf-csrf').doubleCsrf;
-const express = require('express');
-const compression = require('compression');
-const cookieParser = require('cookie-parser');
-const cookieSession = require('cookie-session');
-const multer = require('multer');
-const responseTime = require('response-time');
-const helmet = require('helmet').default;
+// local library imports
+import './src/fetch-patch.js';
+import { serverEvents, EVENT_NAMES } from './src/server-events.js';
+import { CommandLineParser } from './src/command-line.js';
+import { loadPlugins } from './src/plugin-loader.js';
+import {
+    initUserStorage,
+    getCookieSecret,
+    getCookieSessionName,
+    ensurePublicDirectoriesExist,
+    getUserDirectoriesList,
+    migrateSystemPrompts,
+    migrateUserData,
+    requireLoginMiddleware,
+    setUserDataMiddleware,
+    shouldRedirectToLogin,
+    cleanUploads,
+    getSessionCookieAge,
+    verifySecuritySettings,
+    loginPageMiddleware,
+} from './src/users.js';
 
-// net related library imports
-const net = require('net');
-const dns = require('dns');
-const fetch = require('node-fetch').default;
+import getWebpackServeMiddleware from './src/middleware/webpack-serve.js';
+import basicAuthMiddleware from './src/middleware/basicAuth.js';
+import getWhitelistMiddleware from './src/middleware/whitelist.js';
+import accessLoggerMiddleware, { getAccessLogPath, migrateAccessLog } from './src/middleware/accessLogWriter.js';
+import multerMonkeyPatch from './src/middleware/multerMonkeyPatch.js';
+import initRequestProxy from './src/request-proxy.js';
+import getCacheBusterMiddleware from './src/middleware/cacheBuster.js';
+import corsProxyMiddleware from './src/middleware/corsProxy.js';
+import {
+    getVersion,
+    color,
+    removeColorFormatting,
+    getSeparator,
+    safeReadFileSync,
+    setupLogLevel,
+    setWindowTitle,
+} from './src/util.js';
+import { UPLOADS_DIRECTORY } from './src/constants.js';
+import { ensureThumbnailCache } from './src/endpoints/thumbnails.js';
+
+// Routers
+import { router as usersPublicRouter } from './src/endpoints/users-public.js';
+import { init as statsInit, onExit as statsOnExit } from './src/endpoints/stats.js';
+import { checkForNewContent } from './src/endpoints/content-manager.js';
+import { init as settingsInit } from './src/endpoints/settings.js';
+import { redirectDeprecatedEndpoints, ServerStartup, setupPrivateEndpoints } from './src/server-startup.js';
+import { diskCache } from './src/endpoints/characters.js';
 
 // Unrestrict console logs display limit
 util.inspect.defaultOptions.maxArrayLength = null;
 util.inspect.defaultOptions.maxStringLength = null;
 util.inspect.defaultOptions.depth = 4;
 
-// local library imports
-const userModule = require('./src/users');
-const basicAuthMiddleware = require('./src/middleware/basicAuth');
-const whitelistMiddleware = require('./src/middleware/whitelist');
-const contentManager = require('./src/endpoints/content-manager');
-const {
-    getVersion,
-    getConfigValue,
-    color,
-    forwardFetchResponse,
-} = require('./src/util');
-const { ensureThumbnailCache } = require('./src/endpoints/thumbnails');
+// Set a working directory for the server
+const serverDirectory = import.meta.dirname ?? path.dirname(fileURLToPath(import.meta.url));
+console.log(`Node version: ${process.version}. Running in ${process.env.NODE_ENV} environment. Server directory: ${serverDirectory}`);
+process.chdir(serverDirectory);
 
 // Work around a node v20.0.0, v20.1.0, and v20.2.0 bug. The issue was fixed in v20.3.0.
 // https://github.com/nodejs/node/issues/47822#issuecomment-1564708870
@@ -54,70 +87,26 @@ if (process.versions && process.versions.node && process.versions.node.match(/20
     if (net.setDefaultAutoSelectFamily) net.setDefaultAutoSelectFamily(false);
 }
 
-// Set default DNS resolution order to IPv4 first
-dns.setDefaultResultOrder('ipv4first');
+const cliArgs = new CommandLineParser().parse(process.argv);
+globalThis.DATA_ROOT = cliArgs.dataRoot;
+globalThis.COMMAND_LINE_ARGS = cliArgs;
 
-const DEFAULT_PORT = 8000;
-const DEFAULT_AUTORUN = false;
-const DEFAULT_LISTEN = false;
-const DEFAULT_CORS_PROXY = false;
-const DEFAULT_WHITELIST = true;
-const DEFAULT_ACCOUNTS = false;
-const DEFAULT_CSRF_DISABLED = false;
-const DEFAULT_BASIC_AUTH = false;
+if (!cliArgs.enableIPv6 && !cliArgs.enableIPv4) {
+    console.error('error: You can\'t disable all internet protocols: at least IPv6 or IPv4 must be enabled.');
+    process.exit(1);
+}
 
-const cliArguments = yargs(hideBin(process.argv))
-    .usage('Usage: <your-start-script> <command> [options]')
-    .option('port', {
-        type: 'number',
-        default: null,
-        describe: `Sets the port under which SillyTavern will run.\nIf not provided falls back to yaml config 'port'.\n[config default: ${DEFAULT_PORT}]`,
-    }).option('autorun', {
-        type: 'boolean',
-        default: null,
-        describe: `Automatically launch SillyTavern in the browser.\nAutorun is automatically disabled if --ssl is set to true.\nIf not provided falls back to yaml config 'autorun'.\n[config default: ${DEFAULT_AUTORUN}]`,
-    }).option('listen', {
-        type: 'boolean',
-        default: null,
-        describe: `SillyTavern is listening on all network interfaces (Wi-Fi, LAN, localhost). If false, will limit it only to internal localhost (127.0.0.1).\nIf not provided falls back to yaml config 'listen'.\n[config default: ${DEFAULT_LISTEN}]`,
-    }).option('corsProxy', {
-        type: 'boolean',
-        default: null,
-        describe: `Enables CORS proxy\nIf not provided falls back to yaml config 'enableCorsProxy'.\n[config default: ${DEFAULT_CORS_PROXY}]`,
-    }).option('disableCsrf', {
-        type: 'boolean',
-        default: null,
-        describe: 'Disables CSRF protection',
-    }).option('ssl', {
-        type: 'boolean',
-        default: false,
-        describe: 'Enables SSL',
-    }).option('certPath', {
-        type: 'string',
-        default: 'certs/cert.pem',
-        describe: 'Path to your certificate file.',
-    }).option('keyPath', {
-        type: 'string',
-        default: 'certs/privkey.pem',
-        describe: 'Path to your private key file.',
-    }).option('whitelist', {
-        type: 'boolean',
-        default: null,
-        describe: 'Enables whitelist mode',
-    }).option('dataRoot', {
-        type: 'string',
-        default: null,
-        describe: 'Root directory for data storage',
-    }).option('basicAuthMode', {
-        type: 'boolean',
-        default: null,
-        describe: 'Enables basic authentication',
-    }).parseSync();
-
-// change all relative paths
-console.log(`Node version: ${process.version}. Running in ${process.env.NODE_ENV} environment.`);
-const serverDirectory = __dirname;
-process.chdir(serverDirectory);
+try {
+    if (cliArgs.dnsPreferIPv6) {
+        dns.setDefaultResultOrder('ipv6first');
+        console.log('Preferring IPv6 for DNS resolution');
+    } else {
+        dns.setDefaultResultOrder('ipv4first');
+        console.log('Preferring IPv4 for DNS resolution');
+    }
+} catch (error) {
+    console.warn('Failed to set DNS resolution order. Possibly unsupported in this Node version.');
+}
 
 const app = express();
 app.use(helmet({
@@ -126,17 +115,8 @@ app.use(helmet({
 app.use(compression());
 app.use(responseTime());
 
-const server_port = cliArguments.port ?? process.env.SILLY_TAVERN_PORT ?? getConfigValue('port', DEFAULT_PORT);
-const autorun = (cliArguments.autorun ?? getConfigValue('autorun', DEFAULT_AUTORUN)) && !cliArguments.ssl;
-const listen = cliArguments.listen ?? getConfigValue('listen', DEFAULT_LISTEN);
-const enableCorsProxy = cliArguments.corsProxy ?? getConfigValue('enableCorsProxy', DEFAULT_CORS_PROXY);
-const enableWhitelist = cliArguments.whitelist ?? getConfigValue('whitelistMode', DEFAULT_WHITELIST);
-const dataRoot = cliArguments.dataRoot ?? getConfigValue('dataRoot', './data');
-const disableCsrf = cliArguments.disableCsrf ?? getConfigValue('disableCsrfProtection', DEFAULT_CSRF_DISABLED);
-const basicAuthMode = cliArguments.basicAuthMode ?? getConfigValue('basicAuthMode', DEFAULT_BASIC_AUTH);
-const enableAccounts = getConfigValue('enableUserAccounts', DEFAULT_ACCOUNTS);
-
-const uploadsPath = path.join(dataRoot, require('./src/constants').UPLOADS_DIRECTORY);
+app.use(bodyParser.json({ limit: '200mb' }));
+app.use(bodyParser.urlencoded({ extended: true, limit: '200mb' }));
 
 // CORS Settings //
 const CORS = cors({
@@ -146,52 +126,21 @@ const CORS = cors({
 
 app.use(CORS);
 
-if (listen && basicAuthMode) app.use(basicAuthMiddleware);
+if (cliArgs.listen && cliArgs.basicAuthMode) {
+    app.use(basicAuthMiddleware);
+}
 
-app.use(whitelistMiddleware(enableWhitelist, listen));
+if (cliArgs.whitelistMode) {
+    const whitelistMiddleware = await getWhitelistMiddleware();
+    app.use(whitelistMiddleware);
+}
 
-if (enableCorsProxy) {
-    const bodyParser = require('body-parser');
-    app.use(bodyParser.json({
-        limit: '200mb',
-    }));
-    console.log('Enabling CORS proxy');
+if (cliArgs.listen) {
+    app.use(accessLoggerMiddleware());
+}
 
-    app.use('/proxy/:url(*)', async (req, res) => {
-        const url = req.params.url; // get the url from the request path
-
-        // Disallow circular requests
-        const serverUrl = req.protocol + '://' + req.get('host');
-        if (url.startsWith(serverUrl)) {
-            return res.status(400).send('Circular requests are not allowed');
-        }
-
-        try {
-            const headers = JSON.parse(JSON.stringify(req.headers));
-            delete headers['x-csrf-token'];
-            delete headers['host'];
-            delete headers['referer'];
-            delete headers['origin'];
-            delete headers['cookie'];
-            delete headers['sec-fetch-mode'];
-            delete headers['sec-fetch-site'];
-            delete headers['sec-fetch-dest'];
-
-            const bodyMethods = ['POST', 'PUT', 'PATCH'];
-
-            const response = await fetch(url, {
-                method: req.method,
-                headers: headers,
-                body: bodyMethods.includes(req.method) ? JSON.stringify(req.body) : undefined,
-            });
-
-            // Copy over relevant response params to the proxy response
-            forwardFetchResponse(response, res);
-
-        } catch (error) {
-            res.status(500).send('Error occurred while trying to proxy to: ' + url + ' ' + error);
-        }
-    });
+if (cliArgs.enableCorsProxy) {
+    app.use('/proxy/:url(*)', corsProxyMiddleware);
 } else {
     app.use('/proxy/:url(*)', async (_, res) => {
         const message = 'CORS proxy is disabled. Enable it in config.yaml or use the --corsProxy flag.';
@@ -201,39 +150,49 @@ if (enableCorsProxy) {
 }
 
 app.use(cookieSession({
-    name: userModule.getCookieSessionName(),
-    sameSite: 'strict',
+    name: getCookieSessionName(),
+    sameSite: 'lax',
     httpOnly: true,
-    maxAge: 24 * 60 * 60 * 1000, // 24 hours
-    secret: userModule.getCookieSecret(),
+    maxAge: getSessionCookieAge(),
+    secret: getCookieSecret(globalThis.DATA_ROOT),
 }));
 
-app.use(userModule.setUserDataMiddleware);
+app.use(setUserDataMiddleware);
 
 // CSRF Protection //
-if (!disableCsrf) {
-    const COOKIES_SECRET = userModule.getCookieSecret();
-
-    const { generateToken, doubleCsrfProtection } = doubleCsrf({
-        getSecret: userModule.getCsrfSecret,
-        cookieName: 'X-CSRF-Token',
-        cookieOptions: {
-            httpOnly: true,
-            sameSite: 'strict',
-            secure: false,
+if (!cliArgs.disableCsrf) {
+    const csrfSyncProtection = csrfSync({
+        getTokenFromState: (req) => {
+            if (!req.session) {
+                console.error('(CSRF error) getTokenFromState: Session object not initialized');
+                return;
+            }
+            return req.session.csrfToken;
         },
-        size: 64,
-        getTokenFromRequest: (req) => req.headers['x-csrf-token'],
+        getTokenFromRequest: (req) => {
+            return req.headers['x-csrf-token']?.toString();
+        },
+        storeTokenInState: (req, token) => {
+            if (!req.session) {
+                console.error('(CSRF error) storeTokenInState: Session object not initialized');
+                return;
+            }
+            req.session.csrfToken = token;
+        },
+        size: 32,
     });
 
     app.get('/csrf-token', (req, res) => {
         res.json({
-            'token': generateToken(res, req),
+            'token': csrfSyncProtection.generateToken(req),
         });
     });
 
-    app.use(cookieParser(COOKIES_SECRET));
-    app.use(doubleCsrfProtection);
+    // Customize the error message
+    csrfSyncProtection.invalidCsrfTokenError.message = color.red('Invalid CSRF token. Please refresh the page and try again.');
+    csrfSyncProtection.invalidCsrfTokenError.stack = undefined;
+
+    app.use(csrfSyncProtection.csrfSynchronisedProtection);
 } else {
     console.warn('\nCSRF protection is disabled. This will make your server vulnerable to CSRF attacks.\n');
     app.get('/csrf-token', (req, res) => {
@@ -245,8 +204,8 @@ if (!disableCsrf) {
 
 // Static files
 // Host index page
-app.get('/', (request, response) => {
-    if (userModule.shouldRedirectToLogin(request)) {
+app.get('/', getCacheBusterMiddleware(), (request, response) => {
+    if (shouldRedirectToLogin(request)) {
         const query = request.url.split('?')[1];
         const redirectUrl = query ? `/login?${query}` : '/login';
         return response.redirect(redirectUrl);
@@ -255,325 +214,93 @@ app.get('/', (request, response) => {
     return response.sendFile('index.html', { root: path.join(process.cwd(), 'public') });
 });
 
-// Host login page
-app.get('/login', async (request, response) => {
-    if (!enableAccounts) {
-        console.log('User accounts are disabled. Redirecting to index page.');
-        return response.redirect('/');
-    }
-
-    try {
-        const autoLogin = await userModule.tryAutoLogin(request);
-
-        if (autoLogin) {
-            return response.redirect('/');
-        }
-    } catch (error) {
-        console.error('Error during auto-login:', error);
-    }
-
-    return response.sendFile('login.html', { root: path.join(process.cwd(), 'public') });
+// Callback endpoint for OAuth PKCE flows (e.g. OpenRouter)
+app.get('/callback/:source?', (request, response) => {
+    const source = request.params.source;
+    const query = request.url.split('?')[1];
+    const searchParams = new URLSearchParams();
+    source && searchParams.set('source', source);
+    query && searchParams.set('query', query);
+    const path = `/?${searchParams.toString()}`;
+    return response.redirect(307, path);
 });
 
+// Host login page
+app.get('/login', loginPageMiddleware);
+
 // Host frontend assets
+const webpackMiddleware = getWebpackServeMiddleware();
+app.use(webpackMiddleware);
 app.use(express.static(process.cwd() + '/public', {}));
 
 // Public API
-app.use('/api/users', require('./src/endpoints/users-public').router);
+app.use('/api/users', usersPublicRouter);
 
 // Everything below this line requires authentication
-app.use(userModule.requireLoginMiddleware);
-app.get('/api/ping', (_, response) => response.sendStatus(204));
+app.use(requireLoginMiddleware);
+app.get('/api/ping', (request, response) => {
+    if (request.query.extend && request.session) {
+        request.session.touch = Date.now();
+    }
+
+    response.sendStatus(204);
+});
 
 // File uploads
+const uploadsPath = path.join(cliArgs.dataRoot, UPLOADS_DIRECTORY);
 app.use(multer({ dest: uploadsPath, limits: { fieldSize: 10 * 1024 * 1024 } }).single('avatar'));
-app.use(require('./src/middleware/multerMonkeyPatch'));
-
-// User data mount
-app.use('/', userModule.router);
-// Private endpoints
-app.use('/api/users', require('./src/endpoints/users-private').router);
-// Admin endpoints
-app.use('/api/users', require('./src/endpoints/users-admin').router);
+app.use(multerMonkeyPatch);
 
 app.get('/version', async function (_, response) {
     const data = await getVersion();
     response.send(data);
 });
 
-function cleanUploads() {
-    try {
-        if (fs.existsSync(uploadsPath)) {
-            const uploads = fs.readdirSync(uploadsPath);
-
-            if (!uploads.length) {
-                return;
-            }
-
-            console.debug(`Cleaning uploads folder (${uploads.length} files)`);
-            uploads.forEach(file => {
-                const pathToFile = path.join(uploadsPath, file);
-                fs.unlinkSync(pathToFile);
-            });
-        }
-    } catch (err) {
-        console.error(err);
-    }
-}
-
-/**
- * Redirect a deprecated API endpoint URL to its replacement. Because fetch, form submissions, and $.ajax follow
- * redirects, this is transparent to client-side code.
- * @param {string} src The URL to redirect from.
- * @param {string} destination The URL to redirect to.
- */
-function redirect(src, destination) {
-    app.use(src, (req, res) => {
-        console.warn(`API endpoint ${src} is deprecated; use ${destination} instead`);
-        // HTTP 301 causes the request to become a GET. 308 preserves the request method.
-        res.redirect(308, destination);
-    });
-}
-
-// Redirect deprecated character API endpoints
-redirect('/createcharacter', '/api/characters/create');
-redirect('/renamecharacter', '/api/characters/rename');
-redirect('/editcharacter', '/api/characters/edit');
-redirect('/editcharacterattribute', '/api/characters/edit-attribute');
-redirect('/v2/editcharacterattribute', '/api/characters/merge-attributes');
-redirect('/deletecharacter', '/api/characters/delete');
-redirect('/getcharacters', '/api/characters/all');
-redirect('/getonecharacter', '/api/characters/get');
-redirect('/getallchatsofcharacter', '/api/characters/chats');
-redirect('/importcharacter', '/api/characters/import');
-redirect('/dupecharacter', '/api/characters/duplicate');
-redirect('/exportcharacter', '/api/characters/export');
-
-// Redirect deprecated chat API endpoints
-redirect('/savechat', '/api/chats/save');
-redirect('/getchat', '/api/chats/get');
-redirect('/renamechat', '/api/chats/rename');
-redirect('/delchat', '/api/chats/delete');
-redirect('/exportchat', '/api/chats/export');
-redirect('/importgroupchat', '/api/chats/group/import');
-redirect('/importchat', '/api/chats/import');
-redirect('/getgroupchat', '/api/chats/group/get');
-redirect('/deletegroupchat', '/api/chats/group/delete');
-redirect('/savegroupchat', '/api/chats/group/save');
-
-// Redirect deprecated group API endpoints
-redirect('/getgroups', '/api/groups/all');
-redirect('/creategroup', '/api/groups/create');
-redirect('/editgroup', '/api/groups/edit');
-redirect('/deletegroup', '/api/groups/delete');
-
-// Redirect deprecated worldinfo API endpoints
-redirect('/getworldinfo', '/api/worldinfo/get');
-redirect('/deleteworldinfo', '/api/worldinfo/delete');
-redirect('/importworldinfo', '/api/worldinfo/import');
-redirect('/editworldinfo', '/api/worldinfo/edit');
-
-// Redirect deprecated stats API endpoints
-redirect('/getstats', '/api/stats/get');
-redirect('/recreatestats', '/api/stats/recreate');
-redirect('/updatestats', '/api/stats/update');
-
-// Redirect deprecated backgrounds API endpoints
-redirect('/getbackgrounds', '/api/backgrounds/all');
-redirect('/delbackground', '/api/backgrounds/delete');
-redirect('/renamebackground', '/api/backgrounds/rename');
-redirect('/downloadbackground', '/api/backgrounds/upload'); // yes, the downloadbackground endpoint actually uploads one
-
-// Redirect deprecated theme API endpoints
-redirect('/savetheme', '/api/themes/save');
-
-// Redirect deprecated avatar API endpoints
-redirect('/getuseravatars', '/api/avatars/get');
-redirect('/deleteuseravatar', '/api/avatars/delete');
-redirect('/uploaduseravatar', '/api/avatars/upload');
-
-// Redirect deprecated quick reply endpoints
-redirect('/deletequickreply', '/api/quick-replies/delete');
-redirect('/savequickreply', '/api/quick-replies/save');
-
-// Redirect deprecated image endpoints
-redirect('/uploadimage', '/api/images/upload');
-redirect('/listimgfiles/:folder', '/api/images/list/:folder');
-redirect('/api/content/import', '/api/content/importURL');
-
-// Redirect deprecated moving UI endpoints
-redirect('/savemovingui', '/api/moving-ui/save');
-
-// Redirect Serp endpoints
-redirect('/api/serpapi/search', '/api/search/serpapi');
-redirect('/api/serpapi/visit', '/api/search/visit');
-redirect('/api/serpapi/transcript', '/api/search/transcript');
-
-// Moving UI
-app.use('/api/moving-ui', require('./src/endpoints/moving-ui').router);
-
-// Image management
-app.use('/api/images', require('./src/endpoints/images').router);
-
-// Quick reply management
-app.use('/api/quick-replies', require('./src/endpoints/quick-replies').router);
-
-// Avatar management
-app.use('/api/avatars', require('./src/endpoints/avatars').router);
-
-// Theme management
-app.use('/api/themes', require('./src/endpoints/themes').router);
-
-// OpenAI API
-app.use('/api/openai', require('./src/endpoints/openai').router);
-
-//Google API
-app.use('/api/google', require('./src/endpoints/google').router);
-
-//Anthropic API
-app.use('/api/anthropic', require('./src/endpoints/anthropic').router);
-
-// Tokenizers
-app.use('/api/tokenizers', require('./src/endpoints/tokenizers').router);
-
-// Preset management
-app.use('/api/presets', require('./src/endpoints/presets').router);
-
-// Secrets managemenet
-app.use('/api/secrets', require('./src/endpoints/secrets').router);
-
-// Thumbnail generation. These URLs are saved in chat, so this route cannot be renamed!
-app.use('/thumbnail', require('./src/endpoints/thumbnails').router);
-
-// NovelAI generation
-app.use('/api/novelai', require('./src/endpoints/novelai').router);
-
-// Third-party extensions
-app.use('/api/extensions', require('./src/endpoints/extensions').router);
-
-// Asset management
-app.use('/api/assets', require('./src/endpoints/assets').router);
-
-// File management
-app.use('/api/files', require('./src/endpoints/files').router);
-
-// Character management
-app.use('/api/characters', require('./src/endpoints/characters').router);
-
-// Chat management
-app.use('/api/chats', require('./src/endpoints/chats').router);
-
-// Group management
-app.use('/api/groups', require('./src/endpoints/groups').router);
-
-// World info management
-app.use('/api/worldinfo', require('./src/endpoints/worldinfo').router);
-
-// Stats calculation
-const statsEndpoint = require('./src/endpoints/stats');
-app.use('/api/stats', statsEndpoint.router);
-
-// Background management
-app.use('/api/backgrounds', require('./src/endpoints/backgrounds').router);
-
-// Character sprite management
-app.use('/api/sprites', require('./src/endpoints/sprites').router);
-
-// Custom content management
-app.use('/api/content', require('./src/endpoints/content-manager').router);
-
-// Settings load/store
-const settingsEndpoint = require('./src/endpoints/settings');
-app.use('/api/settings', settingsEndpoint.router);
-
-// Stable Diffusion generation
-app.use('/api/sd', require('./src/endpoints/stable-diffusion').router);
-
-// LLM and SD Horde generation
-app.use('/api/horde', require('./src/endpoints/horde').router);
-
-// Vector storage DB
-app.use('/api/vector', require('./src/endpoints/vectors').router);
-
-// Chat translation
-app.use('/api/translate', require('./src/endpoints/translate').router);
-
-// Emotion classification
-app.use('/api/extra/classify', require('./src/endpoints/classify').router);
-
-// Image captioning
-app.use('/api/extra/caption', require('./src/endpoints/caption').router);
-
-// Web search and scraping
-app.use('/api/search', require('./src/endpoints/search').router);
-
-// The different text generation APIs
-
-// Ooba/OpenAI text completions
-app.use('/api/backends/text-completions', require('./src/endpoints/backends/text-completions').router);
-
-// KoboldAI
-app.use('/api/backends/kobold', require('./src/endpoints/backends/kobold').router);
-
-// OpenAI chat completions
-app.use('/api/backends/chat-completions', require('./src/endpoints/backends/chat-completions').router);
-
-// Scale (alt method)
-app.use('/api/backends/scale-alt', require('./src/endpoints/backends/scale-alt').router);
-
-// Speech (text-to-speech and speech-to-text)
-app.use('/api/speech', require('./src/endpoints/speech').router);
-
-// Azure TTS
-app.use('/api/azure', require('./src/endpoints/azure').router);
-
-const tavernUrl = new URL(
-    (cliArguments.ssl ? 'https://' : 'http://') +
-    (listen ? '0.0.0.0' : '127.0.0.1') +
-    (':' + server_port),
-);
-
-const autorunUrl = new URL(
-    (cliArguments.ssl ? 'https://' : 'http://') +
-    ('127.0.0.1') +
-    (':' + server_port),
-);
+redirectDeprecatedEndpoints(app);
+setupPrivateEndpoints(app);
 
 /**
  * Tasks that need to be run before the server starts listening.
+ * @returns {Promise<void>}
  */
-const preSetupTasks = async function () {
+async function preSetupTasks() {
     const version = await getVersion();
 
     // Print formatted header
     console.log();
     console.log(`SillyTavern ${version.pkgVersion}`);
-    console.log(version.gitBranch ? `Running '${version.gitBranch}' (${version.gitRevision}) - ${version.commitDate}` : '');
-    if (version.gitBranch && !version.isLatest && ['staging', 'release'].includes(version.gitBranch)) {
-        console.log('INFO: Currently not on the latest commit.');
-        console.log('      Run \'git pull\' to update. If you have any merge conflicts, run \'git reset --hard\' and \'git pull\' to reset your branch.');
+    if (version.gitBranch) {
+        console.log(`Running '${version.gitBranch}' (${version.gitRevision}) - ${version.commitDate}`);
+        if (!version.isLatest && ['staging', 'release'].includes(version.gitBranch)) {
+            console.log('INFO: Currently not on the latest commit.');
+            console.log('      Run \'git pull\' to update. If you have any merge conflicts, run \'git reset --hard\' and \'git pull\' to reset your branch.');
+        }
     }
     console.log();
 
-    const directories = await userModule.getUserDirectoriesList();
-    await contentManager.checkForNewContent(directories);
-    await ensureThumbnailCache();
+    const directories = await getUserDirectoriesList();
+    await checkForNewContent(directories);
+    await ensureThumbnailCache(directories);
+    await diskCache.verify(directories);
     cleanUploads();
+    migrateAccessLog();
 
-    await settingsEndpoint.init();
-    await statsEndpoint.init();
+    await settingsInit();
+    await statsInit();
 
-    const cleanupPlugins = await loadPlugins();
+    const pluginsDirectory = path.join(serverDirectory, 'plugins');
+    const cleanupPlugins = await loadPlugins(app, pluginsDirectory);
     const consoleTitle = process.title;
 
     let isExiting = false;
     const exitProcess = async () => {
         if (isExiting) return;
         isExiting = true;
-        statsEndpoint.onExit();
+        await statsOnExit();
         if (typeof cleanupPlugins === 'function') {
             await cleanupPlugins();
         }
+        diskCache.dispose();
         setWindowTitle(consoleTitle);
         process.exit();
     };
@@ -585,97 +312,82 @@ const preSetupTasks = async function () {
         console.error('Uncaught exception:', err);
         exitProcess();
     });
-};
+
+    // Add request proxy.
+    initRequestProxy({ enabled: cliArgs.requestProxyEnabled, url: cliArgs.requestProxyUrl, bypass: cliArgs.requestProxyBypass });
+
+    // Wait for frontend libs to compile
+    await webpackMiddleware.runWebpackCompiler();
+}
 
 /**
  * Tasks that need to be run after the server starts listening.
+ * @param {import('./src/server-startup.js').ServerStartupResult} result The result of the server startup
+ * @returns {Promise<void>}
  */
-const postSetupTasks = async function () {
-    console.log('Launching...');
+async function postSetupTasks(result) {
+    const autorunHostname = await cliArgs.getAutorunHostname(result);
+    const autorunUrl = cliArgs.getAutorunUrl(autorunHostname);
 
-    if (autorun) open(autorunUrl.toString());
+    if (cliArgs.autorun) {
+        try {
+            console.log('Launching in a browser...');
+            await open(autorunUrl.toString());
+        } catch (error) {
+            console.error('Failed to launch the browser. Open the URL manually.');
+        }
+    }
 
     setWindowTitle('SillyTavern WebServer');
 
-    console.log(color.green('SillyTavern is listening on: ' + tavernUrl));
+    let logListen = 'SillyTavern is listening on';
 
-    if (listen) {
-        console.log('\n0.0.0.0 means SillyTavern is listening on all network interfaces (Wi-Fi, LAN, localhost). If you want to limit it only to internal localhost (127.0.0.1), change the setting in config.yaml to "listen: false". Check "access.log" file in the SillyTavern directory if you want to inspect incoming connections.\n');
-    }
-
-    if (basicAuthMode) {
-        const basicAuthUser = getConfigValue('basicAuthUser', {});
-        if (!basicAuthUser?.username || !basicAuthUser?.password) {
-            console.warn(color.yellow('Basic Authentication is enabled, but username or password is not set or empty!'));
-        }
+    if (result.useIPv6 && !result.v6Failed) {
+        logListen += color.green(
+            ' IPv6: ' + cliArgs.getIPv6ListenUrl().host,
+        );
     }
 
-    if (listen && !basicAuthMode && enableAccounts) {
-        await userModule.checkAccountsProtection();
+    if (result.useIPv4 && !result.v4Failed) {
+        logListen += color.green(
+            ' IPv4: ' + cliArgs.getIPv4ListenUrl().host,
+        );
     }
-};
 
-/**
- * Loads server plugins from a directory.
- * @returns {Promise<Function>} Function to be run on server exit
- */
-async function loadPlugins() {
-    try {
-        const pluginDirectory = path.join(serverDirectory, 'plugins');
-        const loader = require('./src/plugin-loader');
-        const cleanupPlugins = await loader.loadPlugins(app, pluginDirectory);
-        return cleanupPlugins;
-    } catch {
-        console.log('Plugin loading failed.');
-        return () => { };
-    }
-}
+    const goToLog = 'Go to: ' + color.blue(autorunUrl) + ' to open SillyTavern';
+    const plainGoToLog = removeColorFormatting(goToLog);
 
-if (listen && !enableWhitelist && !basicAuthMode) {
-    if (getConfigValue('securityOverride', false)) {
-        console.warn(color.red('Security has been overridden. If it\'s not a trusted network, change the settings.'));
+    console.log(logListen);
+    if (cliArgs.listen) {
+        console.log();
+        console.log('To limit connections to internal localhost only ([::1] or 127.0.0.1), change the setting in config.yaml to "listen: false".');
+        console.log('Check the "access.log" file in the data directory to inspect incoming connections:', color.green(getAccessLogPath()));
     }
-    else {
-        console.error(color.red('Your SillyTavern is currently unsecurely open to the public. Enable whitelisting or basic authentication.'));
-        process.exit(1);
-    }
+    console.log('\n' + getSeparator(plainGoToLog.length) + '\n');
+    console.log(goToLog);
+    console.log('\n' + getSeparator(plainGoToLog.length) + '\n');
+
+    setupLogLevel();
+    serverEvents.emit(EVENT_NAMES.SERVER_STARTED, { url: autorunUrl });
 }
 
 /**
- * Set the title of the terminal window
- * @param {string} title Desired title for the window
+ * Registers a not-found error response if a not-found error page exists. Should only be called after all other middlewares have been registered.
  */
-function setWindowTitle(title) {
-    if (process.platform === 'win32') {
-        process.title = title;
-    }
-    else {
-        process.stdout.write(`\x1b]2;${title}\x1b\x5c`);
-    }
+function apply404Middleware() {
+    const notFoundWebpage = safeReadFileSync('./public/error/url-not-found.html') ?? '';
+    app.use((req, res) => {
+        res.status(404).send(notFoundWebpage);
+    });
 }
 
 // User storage module needs to be initialized before starting the server
-userModule.initUserStorage(dataRoot)
-    .then(userModule.ensurePublicDirectoriesExist)
-    .then(userModule.migrateUserData)
+initUserStorage(globalThis.DATA_ROOT)
+    .then(ensurePublicDirectoriesExist)
+    .then(migrateUserData)
+    .then(migrateSystemPrompts)
+    .then(verifySecuritySettings)
     .then(preSetupTasks)
-    .finally(() => {
-        if (cliArguments.ssl) {
-            https.createServer(
-                {
-                    cert: fs.readFileSync(cliArguments.certPath),
-                    key: fs.readFileSync(cliArguments.keyPath),
-                }, app)
-                .listen(
-                    Number(tavernUrl.port) || 443,
-                    tavernUrl.hostname,
-                    postSetupTasks,
-                );
-        } else {
-            http.createServer(app).listen(
-                Number(tavernUrl.port) || 80,
-                tavernUrl.hostname,
-                postSetupTasks,
-            );
-        }
-    });
+    .then(apply404Middleware)
+    .then(() => new ServerStartup(app, cliArgs).start())
+    .then(postSetupTasks);
